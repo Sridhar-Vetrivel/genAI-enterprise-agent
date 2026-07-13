@@ -567,3 +567,68 @@ class TestResume:
         monkeypatch.setenv("QA_REPORT_PATH", str(tmp_path / "absent.json"))
         reset_settings()
         assert load_previous_results() == {}
+
+
+class TestVerdictIsNeverThrownAway:
+    """The real failure, from QA query 9. The judge's first attempt enumerated claims but
+    contradicted itself on one; the retry came back empty; and a flawless four-source
+    cross-domain answer was reported as 100% ungrounded. A verdict that graded nine claims
+    out of ten is worth strictly more than no verdict at all."""
+
+    async def test_a_measured_first_verdict_survives_an_empty_retry(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        contradictory = JudgeVerdict(
+            grounded_claims=[
+                "Yes, all quality gates passed during this deployment",
+                "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
+                "Code coverage was 83% against an 80% threshold",
+            ],
+            ungrounded_claims=["All quality gates passed during this deployment"],
+        )
+        replies = iter([contradictory, JudgeVerdict()])  # the retry comes back empty
+        fake_llm.responses[JudgeVerdict] = lambda _: next(replies)
+
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+
+        assert len(fake_llm.calls) == 2
+        assert verdict.is_measured is True
+        assert verdict.hallucination_rate == 0.0
+        # The two claims it graded coherently survive; the disputed one is set aside.
+        assert verdict.total_claims == 2
+        assert "UNVERIFIED" not in " ".join(verdict.ungrounded_claims)
+
+    async def test_a_measured_first_verdict_survives_a_judge_crash_on_retry(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        contradictory = JudgeVerdict(
+            grounded_claims=[
+                "Yes, all quality gates passed during this deployment",
+                "Code coverage was 83% against an 80% threshold",
+            ],
+            ungrounded_claims=["All quality gates passed during this deployment"],
+        )
+        replies = iter([contradictory, LLMError("judge died")])
+
+        def next_reply(_):
+            r = next(replies)
+            if isinstance(r, Exception):
+                raise r
+            return r
+
+        fake_llm.responses[JudgeVerdict] = next_reply
+
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+        assert verdict.is_measured is True
+        assert verdict.total_claims == 1
+        assert verdict.hallucination_rate == 0.0
+
+    async def test_a_judge_that_enumerates_nothing_twice_is_still_unverified(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # Nothing was ever graded, so there is no verdict to keep. This must NOT read as 0%.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict()
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+        assert verdict.hallucination_rate == 100.0
+        assert "UNVERIFIED" in verdict.ungrounded_claims[0]
+        assert len(fake_llm.calls) == 2  # it was pushed once before giving up

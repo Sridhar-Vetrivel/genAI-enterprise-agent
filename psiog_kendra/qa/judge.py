@@ -330,10 +330,17 @@ class JudgeAgent:
             "ungrounded_claims."
         )
 
+        # Never throw away a verdict that graded something. A first attempt that enumerated
+        # ten claims and contradicted itself on one is still a real verdict on the other
+        # nine — worth strictly more than the UNVERIFIED (100%) we fall back to. It was not:
+        # on query 9 the first attempt contradicted itself, the retry came back empty, and a
+        # flawless four-source cross-domain answer was reported as 100% ungrounded.
+        best: JudgeVerdict | None = None
         nudge = ""
+
         for _ in range(2):
             try:
-                verdict = await self._llm.structured(
+                raw = await self._llm.structured(
                     system=SYSTEM,
                     user=base + nudge,
                     schema=JudgeVerdict,
@@ -342,14 +349,25 @@ class JudgeAgent:
             except LLMError:
                 break
 
-            verdict, contradicted = scrub(
-                verdict, answer=response.answer, citations=response.citations
-            )
+            verdict, contradicted = scrub(raw, answer=response.answer, citations=response.citations)
 
-            if contradicted and not nudge:
-                # The judge filed the same claim as both grounded and ungrounded. That says
-                # nothing about the answer — it says the judge slipped. Make it grade those
-                # claims again rather than scoring a coin-flip.
+            if verdict.is_measured:
+                best = verdict
+                if not contradicted or nudge:
+                    # Clean, or already retried once: take it, with any claim the judge
+                    # contradicted itself on twice set aside as ungraded.
+                    return verdict
+
+            if nudge:
+                break  # already pushed once; take whatever `best` holds
+
+            if contradicted:
+                # It filed the same claim as both grounded and ungrounded. That says nothing
+                # about the answer — it says the judge slipped. Make it grade those claims
+                # again rather than us scoring a coin-flip. This runs even when the disputed
+                # pair was the WHOLE verdict, which scrubs to empty: the problem there is the
+                # contradiction, not laziness, so it must not get the "you returned nothing"
+                # push instead.
                 disputed = "\n".join(f"- {c}" for c in contradicted)
                 nudge = (
                     "\n\nYou listed these claims as BOTH grounded and ungrounded:\n"
@@ -357,19 +375,16 @@ class JudgeAgent:
                     "A claim is grounded or it is not. Re-read the source, decide, and put "
                     "each claim in exactly one list."
                 )
-                continue
-
-            if not verdict.is_measured and not nudge:
-                # The judge came back empty. That is not a clean answer — it is a judge
-                # that skipped the work. Push it once, explicitly.
+            else:
+                # The judge came back empty. That is not a clean answer — it is a judge that
+                # skipped the work. Push it once, explicitly.
                 nudge = (
                     "\n\nYou returned no claims at all. The answer above plainly asserts "
                     "facts. Re-read it, split it into individual claims, and list every one."
                 )
-                continue
 
-            if verdict.is_measured:
-                return verdict
+        if best is not None:
+            return best
 
         # Judge failed or refused to enumerate. Report the answer as UNVERIFIED rather than
         # certify it clean — a silent 0% would be the worst possible QA outcome.

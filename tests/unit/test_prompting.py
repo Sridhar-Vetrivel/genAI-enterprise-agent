@@ -273,14 +273,25 @@ class TestFinalize:
         _, citations = finalize("The run completed on 2026-07-12.", [ALLOWED[1]], ALLOWED)
         assert citations == [ALLOWED[1]]  # no ids asserted -> the model is still trusted
 
-    def test_duplicated_punctuation_left_by_the_strip_is_collapsed(self) -> None:
-        # The bug this guards, from QA query 3: the model set the citation off with commas,
-        # and lifting it out stranded them -> "The deployment,, completed successfully."
+    def test_a_citation_set_off_with_commas_takes_both_commas_with_it(self) -> None:
+        # From QA query 3. The model wrote "The deployment, [run #5512], completed" — the
+        # citation is a parenthetical, so lifting it out must remove BOTH commas. Collapsing
+        # the pair to one left the sentence limping: "The deployment, completed successfully."
         answer, _ = finalize(
             f"The deployment, [{ALLOWED[0]}], completed successfully.", [], ALLOWED
         )
-        assert ",," not in answer
-        assert answer == "The deployment, completed successfully."
+        assert answer == "The deployment completed successfully."
+
+    def test_a_comma_before_a_full_stop_is_removed(self) -> None:
+        answer, _ = finalize(f"The job succeeded, [{ALLOWED[0]}].", [], ALLOWED)
+        assert answer == "The job succeeded."
+
+    def test_a_genuine_comma_is_not_eaten(self) -> None:
+        # The parenthetical rule must not touch ordinary commas — only the empty pair its
+        # own strip creates. Lists and subordinate clauses have to survive intact.
+        text = "Unit-tests, code-coverage, and security-scan all passed, as the runbook requires."
+        answer, _ = finalize(text, [], ALLOWED)
+        assert answer == text
 
     def test_a_trailing_comma_before_the_full_stop_is_removed(self) -> None:
         answer, _ = finalize(f"The job succeeded, [{ALLOWED[0]}].", [], ALLOWED)

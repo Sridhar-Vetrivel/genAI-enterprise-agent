@@ -148,9 +148,14 @@ def finalize(answer: str, model_citations: list[str], allowed: list[str]) -> tup
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)  # " ." -> "."
     # The model likes to set a citation off with commas — "The deployment, [run #5512],
-    # completed" — and lifting it out strands them: "The deployment,, completed".
-    cleaned = re.sub(r"([,;:])(?:\s*[,;:])+", r"\1", cleaned)  # ",," -> ","
-    cleaned = re.sub(r"[,;:]+\s*([.!?])", r"\1", cleaned)  # ",." -> "."
+    # completed successfully" — which makes it a parenthetical. Lifting it out must take
+    # BOTH commas with it. Collapsing the pair to one comma instead leaves the sentence
+    # limping: "The deployment, completed successfully." A doubled comma can only be our
+    # own doing (no real clause has an empty element between two commas), so this is safe.
+    cleaned = re.sub(r",(?:\s*,)+", "", cleaned)  # "x, , y" -> "x y"
+    cleaned = re.sub(r"([;:])(?:\s*[;:])+", r"\1", cleaned)  # ";;" -> ";"
+    cleaned = re.sub(r"[,;:]+\s*([.!?])", r"\1", cleaned)  # "x, ." -> "x."
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
     # Only sources the answer's own identifiers do not contradict are eligible. Note this is
     # measured on the prose AFTER the inline citations are lifted out, so a citation cannot

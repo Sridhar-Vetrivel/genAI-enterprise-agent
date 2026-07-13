@@ -60,6 +60,20 @@ Background reading:
 - **Routing is prompt-sensitive.** The coordinator's system prompt teaches *minimal* domain
   selection with worked examples that are deliberately **not** the 12 graded queries. Do not
   paste the test queries into the prompt — that would be teaching to the test.
+- **The model cannot be trusted to say which record it used.** It will answer entirely about
+  job #4822 and cite job #4830 — a real source, on the allow-list, from the right system, that
+  it never touched. An allow-list check does not catch this. `prompting._supported_by()` makes
+  the answer's own record ids (`#4822`, `#99150`) the arbiter and drops any citation the prose
+  contradicts. This applies to citations the model writes *inline* too: lifting one out of the
+  prose proves it *meant* to cite it, not that the citation is right. **A mismatched citation
+  is the worst bug this system can have — it looks grounded and is not.**
+- **The LLM has no clock.** Asked about "yesterday", it picks whichever record it likes.
+  `build_grounded_prompt()` states today's date and what "yesterday" resolves to. Almost every
+  operational question here carries a relative date, so never drop the anchor.
+- **Sanitising the answer is string surgery on facts.** `finalize()` deletes citation strings
+  from the prose; the obvious repairs corrupt the very facts the answer exists to quote. Never
+  add a `".x"` → `". x"` rule — it turns `part-0007.parquet` into `part-0007. parquet`. Test
+  any cleanup against file paths, error messages and timestamps before shipping it.
 
 ## Non-negotiable design rules
 

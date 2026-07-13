@@ -10,7 +10,12 @@ import pytest
 
 from psiog_kendra.config import reset_settings, settings
 from psiog_kendra.llm import LLMError
-from psiog_kendra.qa.judge import JudgeAgent, load_raw_sources, strip_citation_echoes
+from psiog_kendra.qa.judge import (
+    JudgeAgent,
+    claims_the_answer_actually_makes,
+    load_raw_sources,
+    strip_citation_echoes,
+)
 from psiog_kendra.qa.report import (
     QAReport,
     QueryResult,
@@ -127,7 +132,7 @@ class TestJudgeAgent:
         # quietly making the hallucination rate look better than it is. Both directions go.
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(
             grounded_claims=["All quality gates passed during this deployment", AUTH_CITE],
-            ungrounded_claims=["The deployment ran 900 unit tests"],
+            ungrounded_claims=["Code coverage was 83% against an 80% threshold"],
         )
         verdict = await JudgeAgent(fake_llm).verify(auth_response())
         assert verdict.total_claims == 2
@@ -532,7 +537,7 @@ class TestResume:
         self._seed(tmp_path, monkeypatch, [1, 2, 3])
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(
             grounded_claims=["The sales_etl pipeline succeeded"],
-            ungrounded_claims=["It wrote 9999999 records"],
+            ungrounded_claims=["It wrote 1284502 records"],
         )
 
         report = await rejudge(llm=fake_llm)
@@ -708,3 +713,79 @@ class TestQueryTimeout:
 
         result = await evaluate_query(by_id(1), Slow(), None)
         assert result.error is None  # no timeout applied
+
+
+class TestPhantomClaims:
+    """From QA query 10. The answer was flawless — it joined the live failure to the
+    runbook's fix and cited all three sources — and the judge scored it 53.85% by inventing
+    seven claims it had read out of the source."""
+
+    Q10_ANSWER = (
+        "The ingestion job `ingestion_raw_events` (run #99150) failed on 2026-07-12 due to a "
+        "`SchemaMismatchException`. To resolve this, quarantine the offending file and then "
+        "re-run Databricks Job #4822. Following this, manually re-run job 4830 (`crm_sync`)."
+    )
+
+    async def test_an_id_the_answer_never_uttered_is_not_a_claim(self, fake_llm: FakeLLM) -> None:
+        # "The job id is 4821" — the answer mentions 4822 and 4830, never 4821. Word overlap
+        # alone passed it ("job" matched, so it scored exactly 0.5 and squeaked through). An
+        # id cannot be paraphrased: if the answer does not say 4821, it did not claim 4821.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["The ingestion job (run #99150) failed"],
+            ungrounded_claims=[
+                "The job id is 4821",
+                "The run id is 99141",
+                "The run id is 99102",
+            ],
+        )
+        response = CopilotResponse(
+            answer=self.Q10_ANSWER,
+            citations=["Databricks Job #4822 (ingestion_raw_events) run #99150"],
+            domains_used=["data-platform", "docs"],
+        )
+        verdict = await JudgeAgent(fake_llm).verify(response)
+        assert verdict.ungrounded_claims == []
+        assert verdict.hallucination_rate == 0.0
+
+    def test_a_field_restatement_is_not_a_claim_even_when_the_id_is_in_the_answer(
+        self,
+    ) -> None:
+        # "The job id is 4822" is a row of the record, not an assertion. The substantive
+        # claim about that job is enumerated separately and still graded.
+        kept = claims_the_answer_actually_makes(
+            ["The job id is 4822", "Then re-run Databricks Job #4822"], self.Q10_ANSWER
+        )
+        assert kept == ["Then re-run Databricks Job #4822"]
+
+    @pytest.mark.parametrize(
+        "field_claim",
+        [
+            "The job id is 4822",
+            "The run id is 99150",
+            "The branch is main",
+            "The actor is priya.n",
+            "The commit sha is a1f9c34",
+            "The result state is FAILED",
+        ],
+    )
+    def test_every_field_restatement_shape_is_dropped(self, field_claim: str) -> None:
+        assert claims_the_answer_actually_makes([field_claim], self.Q10_ANSWER) == []
+
+    def test_a_real_hallucination_is_still_caught(self) -> None:
+        # The property that matters: none of this may hide a fabricated fact. A hallucination
+        # is something the ANSWER asserted, so it is built from the answer's own words and
+        # its own identifiers — it passes every filter and is still graded.
+        answer = "The sales_etl job succeeded and wrote 9999999 records at 02:14 UTC."
+        claims = ["The job wrote 9999999 records", "The sales_etl job succeeded"]
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+    def test_a_fabricated_id_the_answer_did_assert_is_still_graded(self) -> None:
+        # If the answer really does invent a run, the substantive claim carrying it survives.
+        answer = "Job #9999 failed with a schema mismatch."
+        claims = ["Job #9999 failed with a schema mismatch"]
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+    def test_a_real_claim_quoting_a_file_path_survives(self) -> None:
+        claims = ["The source file is `s3://psiog-raw/events/2026-07-12/part-0007.parquet`"]
+        answer = "It failed on `s3://psiog-raw/events/2026-07-12/part-0007.parquet`."
+        assert claims_the_answer_actually_makes(claims, answer) == claims

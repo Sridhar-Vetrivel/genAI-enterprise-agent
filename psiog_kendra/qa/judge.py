@@ -41,11 +41,16 @@ Your job, step by step:
    answer makes. NEVER list a citation string as a claim. "GitHub Actions run #5498
    (deploy-auth, commit 7de2b10)" is a label, not a fact to check.
 
-   Do NOT enumerate fields of the RAW SOURCE that the answer never mentions. If the answer
-   says nothing about the branch, the actor or the commit sha, then "The branch is main" and
-   "The actor is priya.n" are NOT claims — the answer never made them. You are grading the
-   answer, not summarising the source. Every claim you list must be traceable to words the
-   ANSWER actually wrote.
+   Do NOT enumerate fields of the RAW SOURCE. A row of a record is not a claim. "The job id
+   is 4822", "The run id is 99150", "The branch is main", "The actor is priya.n" — these are
+   FIELDS, and you are reading them out of the very source you are checking against. The
+   answer never wrote those sentences. You are grading the answer, not summarising the source.
+
+   Never invent an identifier. If the answer does not mention job 4821 or run #99141, then
+   "The job id is 4821" is not a claim the answer made — it is one you took from the source.
+   Every id in every claim must appear in the ANSWER.
+
+   Quote each claim as the answer phrased it, not as a field-value pair.
 
 2. For EACH claim, check it against the RAW SOURCE CONTENT.
    - GROUNDED  = the source states it (rewording is fine, it is still grounded).
@@ -156,6 +161,26 @@ def _content_words(text: str) -> list[str]:
     return [w for w in words if len(w) >= 3 and w not in _STOPWORDS]
 
 
+# A bare restatement of a source field: "The job id is 4822", "The branch is main", "The
+# actor is priya.n". These are not assertions the answer makes — they are rows of the record
+# the judge is grading against, read back as though the answer had claimed them.
+#
+# Dropping them cannot hide a hallucination. If the answer really did fabricate an id, the
+# substantive claim that carries it ("Job #9999 failed") is enumerated separately and still
+# graded; only the redundant field-fragment goes.
+_FIELD_RESTATEMENT = re.compile(
+    r"^\s*(?:the\s+)?[\w\s]{0,24}?\b"
+    r"(?:id|ids|sha|branch|actor|owner|status|conclusion|name|time|timestamp|state)\s+"
+    r"(?:is|was|are|were)\s+[^.]{1,40}\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _identifiers(text: str) -> set[str]:
+    """Job ids, run ids, account codes — the values a claim cannot invent by paraphrase."""
+    return {t for t in re.findall(r"\b\d{3,}\b|\b[A-Z]{2,}-\d+\b", text)}
+
+
 def claims_the_answer_actually_makes(
     claims: list[str], answer: str, *, min_overlap: float | None = None
 ) -> list[str]:
@@ -171,19 +196,36 @@ def claims_the_answer_actually_makes(
     free pass and drags the hallucination rate DOWN. A metric that flatters us is worse than
     one that indicts us, because nobody goes looking for the bug.
 
-    The test is whether the claim is even ABOUT what the answer discusses: at least
-    `min_overlap` of its content words must appear in the answer. "The branch is main" shares
-    not one word with an answer about deployments and quality gates, and is dropped. "The
-    deployment completed successfully on 2026-07-11T15:32:00Z" shares every word, and is kept.
+    Three filters, because the first alone was not enough:
 
-    This cannot hide a real hallucination. A hallucination is by definition something the
-    ANSWER asserted, so it is built from the answer's own words and overlaps almost totally.
-    Only claims the answer never made score low enough to be dropped.
+    1. **Word overlap.** At least `min_overlap` of the claim's content words must appear in
+       the answer. "The branch is main" shares not one word with an answer about deployments.
+
+    2. **Identifiers.** Every job id, run id or account code in the claim must appear in the
+       answer. On query 10 the judge produced "The job id is 4821" and "The run id is 99141"
+       for an answer that mentions neither — and marked them UNGROUNDED, scoring a flawless
+       answer at 53.85%. Overlap alone passed them: "job" matched, so "The job id is 4821"
+       scored exactly 0.5 and squeaked through. An id cannot be paraphrased; if the answer
+       does not say 4821, the answer did not claim 4821.
+
+    3. **Field restatements.** "The job id is 4822" is a row of the record, not an assertion,
+       even when the answer does mention 4822 — the substantive claim about that job is
+       enumerated separately and still graded.
+
+    None of this can hide a real hallucination. A hallucination is by definition something
+    the ANSWER asserted, so it is built from the answer's own words and its own identifiers.
+    Only claims the answer never made fail these tests.
     """
     threshold = settings().judge_claim_overlap if min_overlap is None else min_overlap
     spoken = set(_content_words(answer))
+    said_ids = _identifiers(answer)
     kept = []
     for claim in claims:
+        if _FIELD_RESTATEMENT.match(claim):
+            continue
+        if not _identifiers(claim) <= said_ids:
+            continue  # names an id the answer never uttered
+
         words = _content_words(claim)
         if not words:
             continue

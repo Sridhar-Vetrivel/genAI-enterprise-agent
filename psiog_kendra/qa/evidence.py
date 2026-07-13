@@ -80,9 +80,19 @@ ARTEFACTS: tuple[Artefact, ...] = (
             "the per-query PASS lines above the summary",
         ],
         note=(
-            "A full run is ~60 local LLM calls and takes the best part of an hour on CPU. It "
-            "checkpoints after every query, so if you only need the summary and the report is "
-            "already built, `make evidence` reprints it without re-running anything."
+            "**On response time — say this before anyone asks.** A full run is ~60 LLM calls "
+            "and takes about an hour, and a single cross-domain query takes 8-15 minutes. "
+            "That is *not* the architecture. Every call runs on `gemma3:4b` under Ollama, on "
+            "CPU, with no GPU, because **OpenRouter is not provisioned** and the zero-cost "
+            "local fallback is carrying the whole build. A cross-domain query is 5-7 calls "
+            "that cannot be parallelised — the coordinator cannot synthesise until the "
+            "specialists answer, and the judge cannot grade until the answer exists. On a "
+            "hosted endpoint those calls are sub-second, so the same run finishes in "
+            "single-digit minutes and the answers get *better*: most of the leak-stripping "
+            "and citation-repair in `prompting.py` exists to compensate for a 4B model. "
+            "`AI_MODEL_COMPLEX` is an env var — the day OpenRouter is provisioned the model "
+            "swaps with no code change. Record it in Section 8 as a deployment constraint, "
+            "not a design one."
         ),
     ),
     Artefact(

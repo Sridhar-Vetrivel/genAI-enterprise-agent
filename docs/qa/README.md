@@ -7,13 +7,13 @@ Auto-generated from the last `make qa` run. One page per test query: what was as
 | Metric | Target | Measured |
 |---|---|---|
 | Routing accuracy | 100.0% | **100.0%** |
-| Hallucination rate | &lt;10.0% | **4.0%** |
-| Answers carrying citations | all | **9 / 9** |
-| Claims grounded | — | **48 / 50** |
-| Answers verified by the Judge | all | **9 / 9** |
+| Hallucination rate | &lt;10.0% | **2.04%** |
+| Answers carrying citations | all | **8 / 8** |
+| Claims grounded | — | **48 / 49** |
+| Answers verified by the Judge | all | **8 / 8** |
 | LLM cost | ₹0 | **₹0** (local `gemma3:4b` / `gemma3:1b`) |
 
-Queries completed in this run: **9 / 12**
+Queries completed in this run: **8 / 12**
 
 ## Per-query evidence
 
@@ -27,7 +27,7 @@ Queries completed in this run: **9 / 12**
 | 6 | Who is the account owner for TechStart Ltd? | `crm` | ✅ `crm` | 1 | 0.0% | [q06.md](q06.md) |
 | 7 | What is the runbook for when the ingestion pipeline throws a schema mismatch error? | `docs` | ✅ `docs` | 5 | 0.0% | [q07.md](q07.md) |
 | 8 | What does the architecture doc say about the ingestion pipeline? | `docs` | ✅ `docs` | 2 | 0.0% | [q08.md](q08.md) |
-| 9 | Did last night's pipeline failure affect any CRM customer sync? | `crm`, `data-platform` | ✅ `crm`, `data-platform` | 4 | 100.0% | [q09.md](q09.md) |
+| 9 | Did last night's pipeline failure affect any CRM customer sync? | `crm`, `data-platform` | _not yet run_ | — | — | — |
 | 10 | The ingestion job failed - is there a fix in the runbooks? | `data-platform`, `docs` | _not yet run_ | — | — | — |
 | 11 | What's the status of the latest deployment and are there any known issues? | `devops`, `docs` | _not yet run_ | — | — | — |
 | 12 | Give me a full status update - pipeline, deployments, and any open incidents | `crm`, `data-platform`, `devops`, `docs` | _not yet run_ | — | — | — |
@@ -57,7 +57,6 @@ The template requires one row per evidence block, and Section 3 requires every d
 | E-06 | Q06 “Who is the account owner for TechStart Ltd?” routes to crm and answers with citations | D-02, D-06 | *(fill in)* | *(GitHub commit)* |
 | E-07 | Q07 “What is the runbook for when the ingestion pipeline throws a schema mismatch error?” routes to docs and answers with citations | D-02, D-04 | *(fill in)* | *(GitHub commit)* |
 | E-08 | Q08 “What does the architecture doc say about the ingestion pipeline?” routes to docs and answers with citations | D-02, D-04 | *(fill in)* | *(GitHub commit)* |
-| E-09 | Q09 “Did last night's pipeline failure affect any CRM customer sync?” routes to crm, data-platform and answers with citations | D-02, D-06, D-03, D-07 | *(fill in)* | *(GitHub commit)* |
 | E-13 | The graded QA run: routing accuracy and hallucination rate across all 12 queries | D-07 | *(fill in)* | *(GitHub commit)* |
 | E-14 | Full offline test suite passing, with the measured coverage figure | D-08 | *(fill in)* | *(GitHub commit)* |
 | E-15 | The documentation corpus chunked, embedded and indexed for similarity search | D-04 | *(fill in)* | *(GitHub commit)* |

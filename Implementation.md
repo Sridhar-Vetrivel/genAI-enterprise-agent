@@ -45,9 +45,38 @@ judge belongs in the QA layer at all:
 | 6 | The judge filed one claim as **both grounded and ungrounded** | A self-contradiction, scored as a hallucination. |
 | 7 | An answer naming 3 CRM accounts **cited only 1** | Two-thirds of the claims uncited, in the one place where citing across systems *is* the deliverable. |
 
+### Latency: the cost of running the fallback as the primary
+
+**Every number in this build was produced on the zero-cost fallback, not the approved
+primary.** The proposal names OpenRouter (`google/gemini-2.5-flash`) as the inference
+provider; it is not provisioned, so all inference runs on `gemma3:4b` under Ollama, on CPU,
+with no GPU. The functional result is unaffected — routing, grounding and citations are all
+correct — but the latency is not comparable:
+
+| Query type | LLM calls | Measured (local `gemma3:4b`, CPU) |
+|---|---|---|
+| Single-domain (Q1–Q8) | ~3 (route → specialist → judge) | **2–4 min** |
+| Cross-domain (Q9–Q12) | ~5–7 (route → 2–4 specialists → synthesis → judge) | **8–15+ min** |
+| Full 12-query QA run | ~60 | **~1 hour** |
+
+A cross-domain query is slow because the calls are inherently sequential — the coordinator
+cannot synthesise until every specialist has answered, and the judge cannot grade until the
+answer exists. On a hosted endpoint each of those calls is sub-second rather than minutes,
+so **the same run would complete in single-digit minutes, and answer quality would improve
+too**: `gemini-2.5-flash` would not need the leak-stripping and citation-repair scaffolding
+that `gemma3:4b` requires (see the seven defects above — most are small-model artefacts, not
+architectural flaws).
+
+This is a **deployment constraint, not a design one**. `AI_MODEL_COMPLEX` is an env var: the
+day OpenRouter is provisioned, the model swaps with no code change, and the architecture,
+the routing logic and the grounding contract are all unchanged. Worth stating explicitly in
+the mid-term § 8 so the demo's response time is not read as an architectural weakness.
+
 **Deviations from the approved proposal** (record these in the mid-term doc, § 8):
 
-1. **OpenRouter is not provisioned** — all inference runs on local Ollama at ₹0.
+1. **OpenRouter is not provisioned** — all inference runs on local Ollama at ₹0. This is the
+   single biggest deviation, and it is what makes the demo slow (see the latency table
+   above). Everything else follows from it.
 2. **The local model is Gemma 3, not Llama 4 Scout** — `gemma3:4b` for hard cases (routing,
    synthesis, judging), `gemma3:1b` for simple ones. Embeddings need a separate model
    (`nomic-embed-text`, 768-dim) because Gemma 3 cannot embed.

@@ -17,6 +17,7 @@ at this model size.
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 
 # Markers that only ever appear in the prompt. If one shows up in an answer, the model has
 # started reciting its instructions and everything from there on is scaffolding, not answer.
@@ -48,6 +49,7 @@ def build_grounded_prompt(
     facts_label: str,
     facts: str,
     citations: list[str],
+    today: date | None = None,
 ) -> str:
     """The one prompt shape every specialist uses to turn records into a cited answer.
 
@@ -55,17 +57,27 @@ def build_grounded_prompt(
     shouty tokens (`<<<CITATIONS`), and gemma3 started writing the token itself into the
     prose — "...part-0007.parquet [CITATIONS]." Naming a section invites the model to
     reference it, so the sections are named as blandly as possible.
+
+    Today's date is stated explicitly because an LLM has no clock. Asked "did yesterday's
+    ETL pipeline run successfully?", the model picked a run from two days earlier — it had
+    no way to know which record "yesterday" pointed at. Every operational question here is
+    full of relative dates ("yesterday", "last night", "the latest"), so the anchor matters.
     """
+    today = today or date.today()
     citation_block = "\n".join(f"- {c}" for c in citations)
     return (
+        f"Today's date is {today.isoformat()} ({today.strftime('%A')}). "
+        f"Resolve any relative date in the question against it — "
+        f"'yesterday' means {(today - timedelta(days=1)).isoformat()}.\n\n"
         f"{facts_label}\n"
         f"{facts}\n\n"
         f"You may cite only these sources, copied exactly. Never invent one:\n"
         f"{citation_block}\n\n"
         f"Question: {question}\n\n"
-        f"Answer the question using only the records above. Write the answer as plain prose "
-        f"for a colleague. Put the sources you used in the citations field — do not write "
-        f"them, or any part of these instructions, into the answer text."
+        f"Answer the question using only the records above. Pick the record whose timestamp "
+        f"actually matches the question. Write the answer as plain prose for a colleague. "
+        f"Put the sources you used in the citations field — do not write them, or any part "
+        f"of these instructions, into the answer text."
     )
 
 
@@ -90,10 +102,18 @@ def finalize(answer: str, model_citations: list[str], allowed: list[str]) -> tup
     # A citation the model wrote into the prose still tells us what it relied on.
     inline = [c for c in allowed if c in cleaned]
     for citation in inline:
-        # Remove the citation and any brackets that wrapped it.
-        cleaned = re.sub(rf"\s*[\[(]?\s*{re.escape(citation)}\s*[\])]?", "", cleaned)
+        # Substitute a SPACE, not nothing. Deleting the citation outright welded the
+        # surrounding words together: "...ran successfully. [Job #4821 run #99102]
+        # completed with..." collapsed to "...ran successfully.completed with...".
+        cleaned = re.sub(rf"\s*[\[(]?\s*{re.escape(citation)}\s*[\])]?", " ", cleaned)
+
+    # No ".word" -> ". word" repair here on purpose: it would corrupt file paths and
+    # error messages ("part-0007.parquet" -> "part-0007. parquet"), which are exactly the
+    # facts these answers are supposed to quote. Substituting a space above prevents the
+    # weld, so no repair is needed.
+    cleaned = re.sub(r"\(\s*\)|\[\s*\]", "", cleaned)  # empty brackets left behind
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
+    cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)  # " ." -> "."
 
     valid = [c for c in model_citations if c in allowed]
     citations = list(dict.fromkeys(valid + inline))
@@ -128,6 +148,14 @@ def clean_answer(text: str) -> str:
 
     # Remove any bracketed section-name placeholder the model wrote into the prose.
     cleaned = _PLACEHOLDER.sub("", cleaned)
+
+    # gemma3 sprinkles unpaired smart quotes into prose it has stitched together
+    # ('...records written.” ”Run #99102 also...'). If they do not balance, none of them
+    # are meaningful, so drop them all rather than serve visibly broken text.
+    if cleaned.count("“") != cleaned.count("”"):
+        cleaned = cleaned.replace("“", "").replace("”", "")
+    if cleaned.count('"') % 2:
+        cleaned = cleaned.replace('"', "")
 
     # Tidy the seam left by truncating mid-sentence.
     cleaned = re.sub(r"\s+", " ", cleaned).strip()

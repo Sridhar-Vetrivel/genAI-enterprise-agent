@@ -8,6 +8,8 @@ the query 100% ungrounded.
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from psiog_kendra.prompting import build_grounded_prompt, clean_answer, finalize
@@ -59,6 +61,26 @@ class TestBuildGroundedPrompt:
 
     def test_handles_an_empty_citation_list(self) -> None:
         assert build_grounded_prompt(question="q", facts_label="F:", facts="f", citations=[])
+
+    def test_states_todays_date_so_yesterday_can_be_resolved(self) -> None:
+        # An LLM has no clock. Asked "did yesterday's ETL pipeline run?", the model picked
+        # a run from two days earlier because nothing told it what "yesterday" meant.
+        prompt = build_grounded_prompt(
+            question="Did yesterday's pipeline run?",
+            facts_label="F:",
+            facts="f",
+            citations=["c"],
+            today=date(2026, 7, 13),
+        )
+        assert "2026-07-13" in prompt
+        assert "Monday" in prompt
+        assert "'yesterday' means 2026-07-12" in prompt
+
+    def test_tells_the_model_to_match_the_record_to_the_question(self) -> None:
+        prompt = build_grounded_prompt(
+            question="q", facts_label="F:", facts="f", citations=["c"], today=date(2026, 7, 13)
+        )
+        assert "timestamp actually matches the question" in prompt
 
 
 class TestCleanAnswer:
@@ -116,6 +138,16 @@ class TestCleanAnswer:
         # The placeholder strip requires brackets precisely so this cannot happen.
         assert clean_answer(text) == text
 
+    def test_unbalanced_smart_quotes_are_dropped(self) -> None:
+        # Real output: '...1284502 records written.” ”Run #99102 also completed...'
+        cleaned = clean_answer("Records written.” ”Run #99102 also completed.")
+        assert "”" not in cleaned and "“" not in cleaned
+
+    def test_balanced_quotes_are_preserved(self) -> None:
+        # A properly quoted error message must survive — agents are told to quote them.
+        text = "The job failed with “SchemaMismatchException” on customer_tier."
+        assert clean_answer(text) == text
+
     def test_tidies_a_truncation_seam(self) -> None:
         assert not clean_answer("An answer -- Citation strings you may use: x").endswith("-")
 
@@ -162,6 +194,30 @@ class TestFinalize:
         answer, citations = finalize("An answer.", ["invented"], [])
         assert citations == []
         assert answer == "An answer."
+
+    def test_removing_an_inline_citation_does_not_weld_the_sentences(self) -> None:
+        # The bug this guards: deleting the citation outright produced
+        # "...ran successfully.completed with a SUCCESS result state."
+        answer, _ = finalize(
+            f"The pipeline ran successfully. [{ALLOWED[0]}] completed with a SUCCESS state.",
+            [],
+            ALLOWED,
+        )
+        assert "successfully.completed" not in answer
+        assert "successfully. completed" in answer
+
+    def test_a_file_path_in_the_answer_is_not_mangled(self) -> None:
+        # The naive repair for the weld above (".x" -> ". x") would corrupt exactly the
+        # facts these answers exist to quote.
+        text = "The job failed on s3://psiog-raw/events/2026-07-12/part-0007.parquet."
+        answer, _ = finalize(text, [], ALLOWED)
+        assert "part-0007.parquet" in answer
+        assert "part-0007. parquet" not in answer
+
+    def test_empty_brackets_left_by_the_strip_are_removed(self) -> None:
+        answer, _ = finalize(f"The job failed [{ALLOWED[0]}].", [], ALLOWED)
+        assert "[]" not in answer and "( )" not in answer
+        assert answer == "The job failed."
 
     def test_scaffolding_and_inline_citation_are_both_removed(self) -> None:
         answer, citations = finalize(

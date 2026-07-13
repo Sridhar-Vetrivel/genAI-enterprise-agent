@@ -16,6 +16,7 @@ from typing import Any
 from psiog_kendra.config import settings
 from psiog_kendra.domains import DATA_PLATFORM
 from psiog_kendra.llm import Complexity, LLMError, LLMGateway
+from psiog_kendra.prompting import build_grounded_prompt, finalize
 from psiog_kendra.schemas import AgentResponse
 from psiog_kendra.sources.databricks import DatabricksClient
 
@@ -105,13 +106,11 @@ class DataAgent:
                 confidence="low",
             )
 
-        user = (
-            f"Question: {query}\n\n"
-            f"Databricks job-run records (the only facts you may use):\n"
-            f"{json.dumps(runs, indent=2)}\n\n"
-            f"Citation strings you may use, verbatim:\n"
-            + "\n".join(f"- {c}" for c in citations)
-            + "\n\nAnswer the question from these records and cite the runs you used."
+        user = build_grounded_prompt(
+            question=query,
+            facts_label="Databricks job-run records:",
+            facts=json.dumps(runs, indent=2),
+            citations=citations,
         )
         try:
             response = await self._llm.structured(
@@ -128,6 +127,9 @@ class DataAgent:
                 citations=citations[:1],
                 confidence="low",
             )
-        # The model may still paraphrase a citation; keep only ones we actually supplied.
-        response.citations = [c for c in response.citations if c in citations] or citations[:1]
+        # Strip recited scaffolding, lift any inline citation out of the prose, and keep
+        # only citations we actually supplied. See prompting.finalize.
+        response.answer, response.citations = finalize(
+            response.answer, response.citations, citations
+        )
         return response

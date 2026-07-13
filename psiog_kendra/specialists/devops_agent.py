@@ -13,6 +13,7 @@ from typing import Any
 from psiog_kendra.config import settings
 from psiog_kendra.domains import DEVOPS
 from psiog_kendra.llm import Complexity, LLMError, LLMGateway
+from psiog_kendra.prompting import build_grounded_prompt, finalize
 from psiog_kendra.schemas import AgentResponse
 from psiog_kendra.sources.devops import DevOpsClient
 
@@ -81,13 +82,11 @@ class DevOpsAgent:
 
         # Surface the failing gates explicitly so the model does not have to find them.
         enriched = [dict(r, failing_gates=DevOpsClient.failed_gates(r)) for r in runs]
-        user = (
-            f"Question: {query}\n\n"
-            f"Workflow-run records (the only facts you may use):\n"
-            f"{json.dumps(enriched, indent=2)}\n\n"
-            f"Citation strings you may use, verbatim:\n"
-            + "\n".join(f"- {c}" for c in citations)
-            + "\n\nAnswer the question from these records and cite the runs you used."
+        user = build_grounded_prompt(
+            question=query,
+            facts_label="CI/CD workflow-run records, with any failing gates called out:",
+            facts=json.dumps(enriched, indent=2),
+            citations=citations,
         )
         try:
             response = await self._llm.structured(
@@ -106,5 +105,9 @@ class DevOpsAgent:
                 citations=citations[:1],
                 confidence="low",
             )
-        response.citations = [c for c in response.citations if c in citations] or citations[:1]
+        # Strip recited scaffolding, lift any inline citation out of the prose, and keep
+        # only citations we actually supplied. See prompting.finalize.
+        response.answer, response.citations = finalize(
+            response.answer, response.citations, citations
+        )
         return response

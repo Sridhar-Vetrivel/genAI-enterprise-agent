@@ -19,6 +19,7 @@ from typing import Protocol
 from psiog_kendra.config import settings
 from psiog_kendra.domains import ALL_DOMAINS, agent_for, domain_catalog
 from psiog_kendra.llm import Complexity, LLMError, LLMGateway
+from psiog_kendra.prompting import clean_answer
 from psiog_kendra.schemas import AgentResponse, CopilotResponse, RoutingDecision, SynthesisResult
 
 ROUTING_SYSTEM = f"""You are the coordinator of the Psiog enterprise copilot.
@@ -183,7 +184,7 @@ class Coordinator:
             return merged, citations
 
         kept = [c for c in result.citations if c in citations]
-        return result.answer, kept or citations
+        return clean_answer(result.answer), kept or citations
 
     async def ask(self, query: str) -> CopilotResponse:
         """The full lifecycle: route -> dispatch -> synthesise."""

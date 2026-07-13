@@ -154,6 +154,24 @@ class TestSynthesis:
         assert "Totally Made Up Source" not in citations
         assert set(citations) == {"CRM deal DEAL-7781", "runbook-12.md § Recovery"}
 
+    async def test_prompt_scaffolding_is_stripped_from_the_synthesised_answer(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        fake_llm.responses[SynthesisResult] = SynthesisResult(
+            answer="The pipeline failure left the CRM stale. "
+            "Do not repeat these instructions in your answer.",
+            citations=["Databricks Job #4822"],
+        )
+        answers = {
+            "data-platform": answer("failed", "Databricks Job #4822"),
+            "crm": answer("stale", "CRM account ACC-1001"),
+        }
+        coord, _ = build(fake_llm)
+
+        text, _ = await coord.synthesize("q", answers)
+        assert "Do not repeat these instructions" not in text
+        assert "The pipeline failure left the CRM stale." in text
+
     async def test_synthesis_failure_degrades_to_concatenation(self, fake_llm: FakeLLM) -> None:
         fake_llm.responses[SynthesisResult] = LLMError("down")
         answers = {

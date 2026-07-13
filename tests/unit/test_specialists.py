@@ -108,6 +108,18 @@ class TestDataAgent:
         await DataAgent(fake_llm).answer("did the sales etl run?")
         assert fake_llm.complexity_for("AgentResponse") == Complexity.COMPLEX
 
+    async def test_prompt_scaffolding_never_reaches_the_caller(self, fake_llm: FakeLLM) -> None:
+        # gemma3:4b really did this on test query 2: it answered, then recited the tail of
+        # its own prompt into the answer. The corrupted answer defeated the grounding judge.
+        fake_llm.responses[AgentResponse] = answer(
+            "The last failed job was run #99163. "
+            "Citation strings you may use, verbatim: - Databricks Job #4830",
+            "Databricks Job #4830 (crm_sync) run #99163",
+        )
+        got = await DataAgent(fake_llm).answer("what was the error in the last failed job?")
+        assert "Citation strings you may use" not in got.answer
+        assert "The last failed job was run #99163." in got.answer
+
     async def test_record_count_is_capped_by_config(
         self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
     ) -> None:

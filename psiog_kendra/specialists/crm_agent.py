@@ -17,6 +17,7 @@ from typing import Any
 from psiog_kendra.config import settings
 from psiog_kendra.domains import CRM
 from psiog_kendra.llm import Complexity, LLMError, LLMGateway
+from psiog_kendra.prompting import build_grounded_prompt, finalize
 from psiog_kendra.schemas import AgentResponse
 from psiog_kendra.sources.crm import CRMClient
 
@@ -118,12 +119,11 @@ class CRMAgent:
         # Staleness reasoning is the hard case; a plain field lookup is not.
         complexity = Complexity.COMPLEX if self._is_stale(records) else Complexity.SIMPLE
 
-        user = (
-            f"Question: {query}\n\n"
-            f"CRM records (the only facts you may use):\n{json.dumps(records, indent=2)}\n\n"
-            f"Citation strings you may use, verbatim:\n"
-            + "\n".join(f"- {c}" for c in citations)
-            + "\n\nAnswer the question from these records and cite the records you used."
+        user = build_grounded_prompt(
+            question=query,
+            facts_label="CRM account, deal and contact records:",
+            facts=json.dumps(records, indent=2),
+            citations=citations,
         )
         try:
             response = await self._llm.structured(
@@ -144,5 +144,9 @@ class CRMAgent:
             else:
                 text = "No CRM records matched this question."
             return AgentResponse(answer=text, citations=citations[:1], confidence="low")
-        response.citations = [c for c in response.citations if c in citations] or citations[:1]
+        # Strip recited scaffolding, lift any inline citation out of the prose, and keep
+        # only citations we actually supplied. See prompting.finalize.
+        response.answer, response.citations = finalize(
+            response.answer, response.citations, citations
+        )
         return response

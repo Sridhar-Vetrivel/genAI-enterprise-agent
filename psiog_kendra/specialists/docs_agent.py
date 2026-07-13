@@ -11,6 +11,7 @@ from __future__ import annotations
 from psiog_kendra.config import settings
 from psiog_kendra.domains import DOCS
 from psiog_kendra.llm import Complexity, LLMError, LLMGateway
+from psiog_kendra.prompting import build_grounded_prompt, finalize
 from psiog_kendra.rag.retriever import Retrieved, retrieve
 from psiog_kendra.rag.store import VectorStore
 from psiog_kendra.schemas import AgentResponse
@@ -56,12 +57,11 @@ class DocsAgent:
         excerpts = "\n\n".join(
             f"[{c.citation}] (similarity {c.score:.2f})\n{c.text}" for c in chunks
         )
-        user = (
-            f"Question: {query}\n\n"
-            f"Document excerpts (the only facts you may use):\n{excerpts}\n\n"
-            f"Citation strings you may use, verbatim:\n"
-            + "\n".join(f"- {c}" for c in citations)
-            + "\n\nAnswer the question from these excerpts and cite the documents you used."
+        user = build_grounded_prompt(
+            question=query,
+            facts_label="Excerpts retrieved from the internal documentation:",
+            facts=excerpts,
+            citations=citations,
         )
         try:
             response = await self._llm.structured(
@@ -70,5 +70,9 @@ class DocsAgent:
         except LLMError:
             top = chunks[0]
             return AgentResponse(answer=top.text[:400], citations=[top.citation], confidence="low")
-        response.citations = [c for c in response.citations if c in citations] or citations[:1]
+        # Strip recited scaffolding, lift any inline citation out of the prose, and keep
+        # only citations we actually supplied. See prompting.finalize.
+        response.answer, response.citations = finalize(
+            response.answer, response.citations, citations
+        )
         return response

@@ -21,9 +21,29 @@ week-by-week execution plan.
 | CRM agent | 9 | Done | `psiog_kendra/specialists/crm_agent.py` |
 | 4 agents live + routing + cited answers | 10 | Done | `make ask`, `make qa` |
 | Judge Agent (was Week 13 — pulled forward) | 10 | Done | `psiog_kendra/qa/judge.py` |
+| QA evidence pack (one page per test query) | 10 | Done | `docs/qa/` — `make evidence` |
 
 **Measured:** routing accuracy **100%** on all 12 queries (live `gemma3:4b`); test coverage
-**94%** (target ≥80%); 206 tests passing offline; LLM cost **₹0**.
+**93%** (target ≥80%); 329 tests passing offline; LLM cost **₹0**.
+
+### What the Judge Agent actually caught
+
+The Judge is a graded deliverable, but it also earned its keep as a debugging instrument.
+Seven defects were found in the first end-to-end QA runs, and **every one was found by
+reading a raw verdict against the fixture — not one was visible from a PASS line.** The
+offline suite could not have caught any of them: they are all things only the live model
+does. Worth stating plainly in the mid-term doc, because it is the argument for why an LLM
+judge belongs in the QA layer at all:
+
+| # | What was wrong | Why it mattered |
+|---|---|---|
+| 1 | An answer about job **#4822** was served citing job **#4830** | A citation that does not match its answer *looks* grounded and is not. The worst failure this system can have. |
+| 2 | The agents had no clock — "yesterday" resolved to a run 2 days old | Nearly every operational question here carries a relative date. |
+| 3 | Prompt scaffolding recited into the answer text | Corrupted the answer *and* defeated the judge's claim-splitting. |
+| 4 | The judge scored its own **citation label** as a hallucination | Reported 16.67% on a perfectly grounded answer. |
+| 5 | The judge enumerated **source fields the answer never made** | Padded the denominator with free passes — this one flattered the score, which is the direction nobody goes looking. |
+| 6 | The judge filed one claim as **both grounded and ungrounded** | A self-contradiction, scored as a hallucination. |
+| 7 | An answer naming 3 CRM accounts **cited only 1** | Two-thirds of the claims uncited, in the one place where citing across systems *is* the deliverable. |
 
 **Deviations from the approved proposal** (record these in the mid-term doc, § 8):
 

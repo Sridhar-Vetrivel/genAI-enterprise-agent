@@ -44,13 +44,28 @@ RAM**; if it will not fit, the gateway degrades to `gemma3:1b` and says so (rout
 drops noticeably — free the RAM for real results).
 
 ```bash
-make test      # offline suite: no LLM, no network        (206 tests)
-make cov       # the same, with a coverage report          (94%)
-make test-live # the tests that call the real local models
-make qa        # 12 test queries + Judge Agent -> QA evidence report
-make up        # AgentField control plane (Docker)
-make agents    # register the 5 agents against it
+make test        # offline suite: no LLM, no network      (329 tests)
+make cov         # the same, with a coverage report        (93%)
+make test-live   # the tests that call the real local models
+make qa          # 12 test queries + Judge Agent -> data/qa_report.json
+make evidence    # one evidence page per query -> docs/qa/
+make up          # AgentField control plane (Docker)
+make agents      # register the 5 agents against it
 ```
+
+A full `make qa` is ~60 LLM calls on CPU and takes the best part of an hour, so it does not
+have to be all-or-nothing:
+
+```bash
+make qa-resume       # keep what is already in the report, run only what is missing
+make qa-only Q=4     # re-run just query 4; the rest keep their results
+make qa-rejudge      # re-grade the stored answers without asking them again (12 calls, not 60)
+```
+
+`qa-rejudge` exists because routing and answering are five LLM calls a query while judging is
+one. When a fix changes only how answers are *scored*, re-running the copilot just reproduces
+answers already on disk. It is **not** valid when the answers themselves could have changed —
+see the warning in `run_qa`'s docstring.
 
 ## Repository Layout
 

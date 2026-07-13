@@ -12,7 +12,12 @@ from datetime import date
 
 import pytest
 
-from psiog_kendra.prompting import build_grounded_prompt, clean_answer, finalize
+from psiog_kendra.prompting import (
+    build_grounded_prompt,
+    clean_answer,
+    finalize,
+    finalize_synthesis,
+)
 
 ALLOWED = [
     "Databricks Job #4822 (ingestion_raw_events) run #99150",
@@ -306,3 +311,73 @@ class TestFinalize:
         assert "Citation strings" not in answer
         assert ALLOWED[0] not in answer
         assert citations == [ALLOWED[0]]
+
+
+class TestFinalizeSynthesis:
+    """Cross-domain synthesis. None of this can happen in a single-domain answer — those
+    bypass synthesis entirely — which is why it only surfaced on QA query 9."""
+
+    SUPPLIED = [
+        "Databricks Job #4830 (crm_sync) run #99163",
+        "Databricks Job #4822 (ingestion_raw_events) run #99150",
+        "CRM account ACC-1001 (Acme Corp)",
+        "CRM account ACC-1002 (TechStart Ltd)",
+        "CRM account ACC-1003 (Northwind Retail)",
+    ]
+
+    def test_the_specialists_name_tags_are_stripped_from_the_prose(self) -> None:
+        # The coordinator labelled each report "[data-agent] ..." and gemma3 copied the tags
+        # straight into the answer. A bracketed tag is an invitation to copy.
+        answer, _ = finalize_synthesis(
+            "Zero rows were synced to CRM [data-agent]. Three accounts were affected [crm-agent].",
+            [],
+            self.SUPPLIED,
+        )
+        assert "[data-agent]" not in answer
+        assert "[crm-agent]" not in answer
+        assert answer == "Zero rows were synced to CRM. Three accounts were affected."
+
+    def test_a_source_the_answer_names_is_cited_even_if_the_model_forgot_it(self) -> None:
+        # The real failure: the answer named ACC-1001, ACC-1002 and ACC-1003 and cited only
+        # ACC-1001, leaving two-thirds of its claims uncited.
+        answer = (
+            "The crm_sync job (run #99163) failed, so accounts ACC-1001 (Acme Corp), "
+            "ACC-1002 (TechStart Ltd) and ACC-1003 (Northwind Retail) were affected."
+        )
+        _, citations = finalize_synthesis(
+            answer, ["CRM account ACC-1001 (Acme Corp)"], self.SUPPLIED
+        )
+        assert "CRM account ACC-1002 (TechStart Ltd)" in citations
+        assert "CRM account ACC-1003 (Northwind Retail)" in citations
+        assert "Databricks Job #4830 (crm_sync) run #99163" in citations
+
+    def test_a_source_the_answer_never_touches_is_not_cited(self) -> None:
+        # The bias is towards keeping, but not blindly: a specialist source that appears
+        # nowhere in the synthesis and that the model never named is left out.
+        answer = "Only account ACC-1001 (Acme Corp) was affected."
+        _, citations = finalize_synthesis(answer, [], self.SUPPLIED)
+        assert citations == ["CRM account ACC-1001 (Acme Corp)"]
+
+    def test_a_citation_with_nothing_identifiable_is_always_kept(self) -> None:
+        # A doc section carries no id, so it cannot be checked this way. Absence of evidence
+        # is not evidence of absence — it stays.
+        docs = ["runbook-12-schema-mismatch.md § Cause"]
+        _, citations = finalize_synthesis("Re-run the job without loosening the type.", [], docs)
+        assert citations == docs
+
+    def test_scaffolding_leaks_are_still_stripped(self) -> None:
+        answer, _ = finalize_synthesis(
+            "The job failed. Citation strings you may use: blah", [], self.SUPPLIED
+        )
+        assert "Citation strings" not in answer
+
+    def test_nothing_established_falls_back_to_every_specialist_source(self) -> None:
+        # Better to over-cite the specialists that were actually dispatched than to serve a
+        # cross-domain answer with no provenance at all.
+        _, citations = finalize_synthesis("Several systems were affected.", [], self.SUPPLIED)
+        assert citations == self.SUPPLIED
+
+    def test_no_supplied_sources_yields_no_citations(self) -> None:
+        answer, citations = finalize_synthesis("An answer.", ["invented"], [])
+        assert citations == []
+        assert answer == "An answer."

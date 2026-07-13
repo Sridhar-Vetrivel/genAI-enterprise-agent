@@ -53,6 +53,58 @@ def _record_ids(text: str) -> set[str]:
     return set(_RECORD_ID.findall(text))
 
 
+# The specialist's own name, as the coordinator labels its report. gemma3 copies the tag
+# straight into the synthesised prose — "...zero rows synced to CRM [data-agent]." — which
+# is prompt scaffolding reaching the user, and it derails the grounding judge's claim
+# splitting on top.
+_AGENT_TAG = re.compile(r"\s*[\[(]\s*[a-z][a-z0-9-]*-agent\s*[\])]", re.IGNORECASE)
+
+# Anything in a citation that could identify the record it names: "#99163", "ACC-1002",
+# "2026-07-11T04:02:00Z". Unlike _record_ids this does not require a '#', because a CRM
+# account is cited as "ACC-1002" with no hash. It is only ever matched WHOLE, so the year
+# in a date cannot masquerade as an id.
+_CITATION_KEY = re.compile(r"[a-z0-9][a-z0-9:._-]*[0-9][a-z0-9:._-]*", re.IGNORECASE)
+
+
+def finalize_synthesis(
+    answer: str, model_citations: list[str], supplied: list[str]
+) -> tuple[str, list[str]]:
+    """Clean a cross-domain synthesis and settle which specialist sources it may cite.
+
+    Two things went wrong on the first cross-domain query, and neither can happen in a
+    single-domain answer (those bypass synthesis entirely):
+
+    * The coordinator labelled each specialist report "[data-agent] ...", and gemma3 wrote
+      the labels into the answer. Bracketed tags are an invitation to copy.
+    * The synthesis named accounts ACC-1001, ACC-1002 and ACC-1003, and cited only ACC-1001.
+      Keeping just the citations the model echoed back silently dropped sources the answer
+      demonstrably used, leaving two-thirds of the claims uncited.
+
+    So a specialist's citation is kept when the model names it OR when the record it points
+    at is named in the answer. A citation with nothing identifiable in it (a doc section) is
+    kept regardless — it cannot be checked this way, and absence of evidence is not evidence
+    of absence. The specialists were dispatched because the question needed them and their
+    answers are the sole material here, so the bias is deliberately towards keeping.
+    """
+    cleaned = _AGENT_TAG.sub("", clean_answer(answer))
+    cleaned = re.sub(r"\(\s*\)|\[\s*\]", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
+    cleaned = re.sub(r",(?:\s*,)+", "", cleaned)
+    cleaned = re.sub(r"[,;:]+\s*([.!?])", r"\1", cleaned)
+
+    spoken = {k.lower() for k in _CITATION_KEY.findall(cleaned)}
+    named = {c for c in model_citations if c in supplied}
+
+    kept = []
+    for citation in supplied:
+        keys = {k.lower() for k in _CITATION_KEY.findall(citation)}
+        if citation in named or not keys or (keys & spoken):
+            kept.append(citation)
+
+    return cleaned, kept or supplied
+
+
 def _supported_by(answer: str, allowed: list[str]) -> list[str]:
     """The sources an answer's own identifiers entitle it to cite.
 

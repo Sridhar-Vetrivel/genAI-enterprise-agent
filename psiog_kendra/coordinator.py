@@ -19,7 +19,7 @@ from typing import Protocol
 from psiog_kendra.config import settings
 from psiog_kendra.domains import ALL_DOMAINS, agent_for, domain_catalog
 from psiog_kendra.llm import Complexity, LLMError, LLMGateway
-from psiog_kendra.prompting import clean_answer
+from psiog_kendra.prompting import finalize_synthesis
 from psiog_kendra.schemas import AgentResponse, CopilotResponse, RoutingDecision, SynthesisResult
 
 ROUTING_SYSTEM = f"""You are the coordinator of the Psiog enterprise copilot.
@@ -162,14 +162,19 @@ class Coordinator:
             only = next(iter(answers.values()))
             return only.answer, only.citations
 
+        # The reports are introduced in prose, not tagged "[data-agent]". A bracketed tag is
+        # an invitation: gemma3 copied them straight into the answer — "...zero rows synced
+        # to CRM [data-agent]. Consequently, accounts ... were affected [crm-agent]."
         reports = "\n\n".join(
-            f"[{agent_for(d)}] {a.answer}\nCitations: {', '.join(a.citations) or 'none'}"
+            f"The {agent_for(d)} reports:\n{a.answer}\n"
+            f"Sources it used: {', '.join(a.citations) or 'none'}"
             for d, a in answers.items()
         )
         user = (
             f"User question: {query}\n\n"
-            f"Specialist reports:\n{reports}\n\n"
-            f"Write the unified answer, preserving every citation."
+            f"{reports}\n\n"
+            f"Write the unified answer. Put the sources in the citations field — never write "
+            f"a source, or a specialist's name, into the answer text."
         )
         try:
             result = await self._llm.structured(
@@ -183,8 +188,7 @@ class Coordinator:
             merged = " ".join(a.answer for a in answers.values())
             return merged, citations
 
-        kept = [c for c in result.citations if c in citations]
-        return clean_answer(result.answer), kept or citations
+        return finalize_synthesis(result.answer, result.citations, citations)
 
     async def ask(self, query: str) -> CopilotResponse:
         """The full lifecycle: route -> dispatch -> synthesise."""

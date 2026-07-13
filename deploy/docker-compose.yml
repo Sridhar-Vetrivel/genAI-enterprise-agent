@@ -1,0 +1,35 @@
+# AgentField control plane for Psiog Kendra.
+#
+#   make up      # start
+#   make agents  # register the 5 agents against it
+#   make down    # stop
+#
+# Every value is read from the repo-root .env (see deploy/.env.example). Nothing here is
+# hardcoded, so the same file works locally and on the Azure B1s VM.
+
+services:
+  agentfield:
+    image: ${AGENTFIELD_IMAGE:-agentfield/control-plane:latest}
+    container_name: kendra-control-plane
+    restart: unless-stopped
+    ports:
+      - "${AGENTFIELD_PORT:-8080}:8080"
+    environment:
+      # The control plane reaches Ollama on the host, not inside this network.
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      AI_MODEL_COMPLEX: ${AI_MODEL_COMPLEX:-gemma3:4b}
+      AI_MODEL_SIMPLE: ${AI_MODEL_SIMPLE:-gemma3:1b}
+      AI_EMBED_MODEL: ${AI_EMBED_MODEL:-nomic-embed-text}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - agentfield-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  agentfield-data:

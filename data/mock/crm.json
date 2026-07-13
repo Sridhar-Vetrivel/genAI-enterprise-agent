@@ -1,0 +1,92 @@
+{
+  "accounts": [
+    {
+      "account_id": "ACC-1001",
+      "name": "Acme Corp",
+      "owner": "Divya Raman",
+      "industry": "Manufacturing",
+      "tier": "enterprise",
+      "last_synced_at": "2026-07-11T04:02:00Z",
+      "sync_status": "stale",
+      "sync_note": "Nightly crm_sync run 99163 failed on 2026-07-12; record last refreshed 2026-07-11."
+    },
+    {
+      "account_id": "ACC-1002",
+      "name": "TechStart Ltd",
+      "owner": "Karthik Rao",
+      "industry": "SaaS",
+      "tier": "mid-market",
+      "last_synced_at": "2026-07-11T04:02:00Z",
+      "sync_status": "stale",
+      "sync_note": "Nightly crm_sync run 99163 failed on 2026-07-12; record last refreshed 2026-07-11."
+    },
+    {
+      "account_id": "ACC-1003",
+      "name": "Northwind Retail",
+      "owner": "Divya Raman",
+      "industry": "Retail",
+      "tier": "enterprise",
+      "last_synced_at": "2026-07-12T04:02:00Z",
+      "sync_status": "current",
+      "sync_note": "Synced from a cached partition before the crm_sync failure."
+    }
+  ],
+  "deals": [
+    {
+      "deal_id": "DEAL-7781",
+      "account_id": "ACC-1001",
+      "account_name": "Acme Corp",
+      "stage": "Negotiation",
+      "amount_inr": 4500000,
+      "owner": "Divya Raman",
+      "probability": 70,
+      "expected_close": "2026-08-30",
+      "last_activity": "2026-07-10T13:45:00Z",
+      "last_activity_note": "Pricing call held; revised SOW sent for legal review."
+    },
+    {
+      "deal_id": "DEAL-7802",
+      "account_id": "ACC-1002",
+      "account_name": "TechStart Ltd",
+      "stage": "Proposal Sent",
+      "amount_inr": 1200000,
+      "owner": "Karthik Rao",
+      "probability": 45,
+      "expected_close": "2026-09-15",
+      "last_activity": "2026-07-08T09:10:00Z",
+      "last_activity_note": "Proposal v2 shared; awaiting procurement feedback."
+    },
+    {
+      "deal_id": "DEAL-7745",
+      "account_id": "ACC-1003",
+      "account_name": "Northwind Retail",
+      "stage": "Closed Won",
+      "amount_inr": 8300000,
+      "owner": "Divya Raman",
+      "probability": 100,
+      "expected_close": "2026-06-28",
+      "last_activity": "2026-06-28T16:20:00Z",
+      "last_activity_note": "Contract signed; onboarding kicked off."
+    }
+  ],
+  "contacts": [
+    {
+      "contact_id": "CON-501",
+      "account_id": "ACC-1001",
+      "account_name": "Acme Corp",
+      "name": "Ravi Menon",
+      "title": "VP Engineering",
+      "email": "ravi.menon@acme.example",
+      "last_contacted": "2026-07-10T13:45:00Z"
+    },
+    {
+      "contact_id": "CON-514",
+      "account_id": "ACC-1002",
+      "account_name": "TechStart Ltd",
+      "name": "Ananya Iyer",
+      "title": "Head of Procurement",
+      "email": "ananya.iyer@techstart.example",
+      "last_contacted": "2026-07-08T09:10:00Z"
+    }
+  ]
+}

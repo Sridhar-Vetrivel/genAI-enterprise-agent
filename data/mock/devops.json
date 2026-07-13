@@ -1,0 +1,55 @@
+{
+  "workflow_runs": [
+    {
+      "run_id": 5512,
+      "service": "payments-service",
+      "workflow_name": "deploy-payments",
+      "commit_sha": "a1f9c34",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-07-11T15:32:00Z",
+      "actor": "priya.n",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "412 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "86% (threshold 80%)"},
+        {"name": "sonarqube", "status": "passed", "detail": "0 blocker, 2 minor issues"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"},
+        {"name": "integration-tests", "status": "passed", "detail": "58 passed, 0 failed"}
+      ]
+    },
+    {
+      "run_id": 5498,
+      "service": "auth-service",
+      "workflow_name": "deploy-auth",
+      "commit_sha": "7de2b10",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-07-09T11:05:00Z",
+      "actor": "arjun.k",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "230 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "83% (threshold 80%)"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"}
+      ]
+    },
+    {
+      "run_id": 5530,
+      "service": "ingestion-service",
+      "workflow_name": "deploy-ingestion",
+      "commit_sha": "c40be71",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "failure",
+      "deployed_at": "2026-07-12T09:20:00Z",
+      "actor": "meera.s",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "180 passed, 0 failed"},
+        {"name": "code-coverage", "status": "failed", "detail": "74% (threshold 80%)"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"},
+        {"name": "integration-tests", "status": "failed", "detail": "3 failed: schema contract test for customer_tier expects StringType"}
+      ]
+    }
+  ]
+}

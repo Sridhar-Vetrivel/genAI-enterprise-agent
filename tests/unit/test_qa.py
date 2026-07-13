@@ -1,0 +1,261 @@
+"""The Judge Agent and the QA report — the hallucination-rate machinery itself."""
+
+from __future__ import annotations
+
+import pytest
+
+from psiog_kendra.llm import LLMError
+from psiog_kendra.qa.judge import JudgeAgent, load_raw_sources
+from psiog_kendra.qa.report import QAReport, QueryResult, evaluate_query, render, run_qa
+from psiog_kendra.qa.test_queries import TEST_QUERIES, by_id
+from psiog_kendra.schemas import CopilotResponse, JudgeVerdict, RoutingDecision, SynthesisResult
+from tests.conftest import FakeLLM, routing
+
+
+def response(answer: str = "a", citations: list[str] | None = None) -> CopilotResponse:
+    # `is None`, not `or`: an explicitly empty citation list is the case under test.
+    cited = ["Databricks Job #4821"] if citations is None else citations
+    return CopilotResponse(answer=answer, citations=cited, domains_used=["data-platform"])
+
+
+class TestLoadRawSources:
+    def test_carries_every_system_the_copilot_can_cite(self) -> None:
+        raw = load_raw_sources()
+        assert {"databricks", "devops", "crm", "documentation"} <= set(raw)
+        assert raw["documentation"]
+
+
+class TestJudgeAgent:
+    async def test_reports_a_clean_answer_as_grounded(self, fake_llm: FakeLLM) -> None:
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a", "b", "c"])
+        verdict = await JudgeAgent(fake_llm).verify(response())
+        assert verdict.hallucination_rate == 0.0
+        assert verdict.is_measured is True
+
+    async def test_detects_ungrounded_claims(self, fake_llm: FakeLLM) -> None:
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["a", "b", "c"], ungrounded_claims=["Job ran at 09:00"]
+        )
+        verdict = await JudgeAgent(fake_llm).verify(response())
+        assert verdict.hallucination_rate == 25.0
+        assert verdict.ungrounded_claims == ["Job ran at 09:00"]
+
+    async def test_an_uncited_answer_is_ungrounded_by_definition(self, fake_llm: FakeLLM) -> None:
+        verdict = await JudgeAgent(fake_llm).verify(response(citations=[]))
+        assert verdict.hallucination_rate == 100.0
+        # No LLM call needed - an answer with no citation cannot be verified.
+        assert fake_llm.calls == []
+
+    async def test_an_empty_answer_has_no_claims(self, fake_llm: FakeLLM) -> None:
+        verdict = await JudgeAgent(fake_llm).verify(response(answer="   "))
+        assert verdict.total_claims == 0
+        assert fake_llm.calls == []
+
+    async def test_a_judge_that_enumerates_nothing_is_retried(self, fake_llm: FakeLLM) -> None:
+        # The bug this guards: gemma3 returned zero claims for a substantive answer, which
+        # scored as a perfect 0% hallucination without checking anything.
+        replies = iter([JudgeVerdict(), JudgeVerdict(grounded_claims=["a", "b"])])
+        fake_llm.responses[JudgeVerdict] = lambda _: next(replies)
+
+        verdict = await JudgeAgent(fake_llm).verify(response())
+        assert verdict.total_claims == 2
+        assert len(fake_llm.calls) == 2
+        assert "no claims at all" in fake_llm.calls[1]["user"]
+
+    async def test_a_judge_that_never_enumerates_marks_the_answer_unverified(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # Both attempts come back empty. This must NOT read as 0% hallucination.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict()
+
+        verdict = await JudgeAgent(fake_llm).verify(response())
+        assert verdict.hallucination_rate == 100.0
+        assert "UNVERIFIED" in verdict.ungrounded_claims[0]
+
+    async def test_a_broken_judge_does_not_certify_the_answer_as_clean(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # A judge that cannot run must never silently report 0% hallucination.
+        fake_llm.responses[JudgeVerdict] = LLMError("judge down")
+        verdict = await JudgeAgent(fake_llm).verify(response())
+        assert verdict.hallucination_rate == 100.0
+        assert "UNVERIFIED" in verdict.ungrounded_claims[0]
+
+    async def test_the_judge_grades_against_raw_sources_not_the_agent_context(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a"])
+        await JudgeAgent(fake_llm).verify(response())
+        # The real Databricks fixture content must be in the judge's prompt.
+        assert "99141" in fake_llm.calls[0]["user"]
+
+    async def test_source_payload_is_capped(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from psiog_kendra.config import reset_settings
+
+        monkeypatch.setenv("QA_JUDGE_SOURCE_CHAR_LIMIT", "200")
+        reset_settings()
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a"])
+        await JudgeAgent(fake_llm).verify(response())
+        assert len(fake_llm.calls[0]["user"]) < 1500
+
+
+class TestQueryResult:
+    def test_hallucination_rate_per_query(self) -> None:
+        r = QueryResult(
+            id=1,
+            query="q",
+            expected_domains=["crm"],
+            actual_domains=["crm"],
+            routed_correctly=True,
+            answer="a",
+            citations=["c"],
+            grounded_claim_texts=["a", "b", "c", "d"],
+            ungrounded_claims=["e"],
+        )
+        assert r.total_claims == 5
+        assert r.grounded_claims == 4
+        assert r.hallucination_rate == 20.0
+
+    def test_no_claims_is_zero(self) -> None:
+        r = QueryResult(
+            id=1,
+            query="q",
+            expected_domains=[],
+            actual_domains=[],
+            routed_correctly=False,
+            answer="",
+            citations=[],
+        )
+        assert r.hallucination_rate == 0.0
+
+
+class TestQAReport:
+    def _result(self, qid: int, correct: bool, total: int = 4, grounded: int = 4) -> QueryResult:
+        tq = by_id(qid)
+        return QueryResult(
+            id=qid,
+            query=tq.query,
+            expected_domains=sorted(tq.expected_domains),
+            actual_domains=sorted(tq.expected_domains) if correct else ["crm"],
+            routed_correctly=correct,
+            answer="a",
+            citations=["c"],
+            grounded_claim_texts=[f"g{i}" for i in range(grounded)],
+            ungrounded_claims=[f"u{i}" for i in range(total - grounded)],
+            judged=total > 0,
+        )
+
+    def test_unjudged_answers_are_reported_not_hidden(self) -> None:
+        judged = self._result(1, True)
+        unjudged = self._result(2, True, total=0, grounded=0)
+        report = QAReport([judged, unjudged])
+        assert report.judged_answers == 1
+        assert "not verified by the judge" in render(report)
+
+    def test_routing_accuracy_is_pooled(self) -> None:
+        report = QAReport([self._result(1, True), self._result(2, False)])
+        assert report.routing_accuracy == 50.0
+
+    def test_hallucination_rate_pools_claims_not_percentages(self) -> None:
+        # 10 claims, 1 ungrounded overall => 10%, NOT the mean of the per-query rates.
+        report = QAReport(
+            [self._result(1, True, total=8, grounded=8), self._result(2, True, total=2, grounded=1)]
+        )
+        assert report.hallucination_rate == 10.0
+
+    def test_counts_answers_carrying_citations(self) -> None:
+        a = self._result(1, True)
+        b = self._result(2, True)
+        b.citations = []
+        assert QAReport([a, b]).cited_answers == 1
+
+    def test_empty_report_does_not_divide_by_zero(self) -> None:
+        report = QAReport([])
+        assert report.routing_accuracy == 0.0
+        assert report.hallucination_rate == 0.0
+
+    def test_to_dict_carries_the_graded_numbers(self) -> None:
+        summary = QAReport([self._result(1, True)]).to_dict()["summary"]
+        assert summary["routing_accuracy_pct"] == 100.0
+        assert summary["queries"] == 1
+
+    def test_render_is_printable(self) -> None:
+        out = render(QAReport([self._result(1, True), self._result(9, False)]))
+        assert "Routing accuracy" in out and "Hallucination rate" in out
+        assert "PASS" in out and "FAIL" in out
+
+
+class TestEvaluateQuery:
+    async def test_records_a_correct_route(self, fake_llm: FakeLLM) -> None:
+        from psiog_kendra.app import build_copilot
+
+        tq = by_id(5)  # CRM
+        fake_llm.responses[RoutingDecision] = routing("crm")
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a", "b"])
+        from psiog_kendra.schemas import AgentResponse
+
+        fake_llm.responses[AgentResponse] = AgentResponse(
+            answer="Acme is in Negotiation.", citations=["CRM deal DEAL-7781 (Acme Corp)"]
+        )
+
+        result = await evaluate_query(tq, build_copilot(llm=fake_llm), JudgeAgent(fake_llm))
+        assert result.routed_correctly is True
+        assert result.citations
+
+    async def test_a_crashing_query_is_a_reported_failure_not_an_exception(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        from psiog_kendra.app import build_copilot
+
+        fake_llm.responses[RoutingDecision] = LLMError("model down")
+        result = await evaluate_query(by_id(1), build_copilot(llm=fake_llm), None)
+
+        assert result.routed_correctly is False
+        assert result.error is not None
+        assert result.actual_domains == []
+
+    async def test_must_mention_catches_a_grounded_but_wrong_answer(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        from psiog_kendra.app import build_copilot
+        from psiog_kendra.schemas import AgentResponse
+
+        tq = by_id(6)  # must mention "Karthik"
+        fake_llm.responses[RoutingDecision] = routing("crm")
+        fake_llm.responses[AgentResponse] = AgentResponse(
+            answer="The owner is somebody else.", citations=["CRM account ACC-1002 (TechStart Ltd)"]
+        )
+        result = await evaluate_query(tq, build_copilot(llm=fake_llm), None)
+        assert result.mentions_ok is False
+
+
+class TestRunQA:
+    async def test_runs_the_whole_suite_offline(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from psiog_kendra.config import reset_settings
+        from psiog_kendra.schemas import AgentResponse
+
+        # FakeLLM's pseudo-embeddings do not reproduce nomic's score distribution, so the
+        # docs agent would retrieve nothing and return an (honestly) uncited answer.
+        monkeypatch.setenv("RAG_MIN_SCORE", "0.0")
+        reset_settings()
+
+        fake_llm.responses[RoutingDecision] = lambda user: RoutingDecision(
+            # Route by the ground truth so the harness itself can be tested.
+            domains=sorted(next(q.expected_domains for q in TEST_QUERIES if q.query in user))
+        )
+        fake_llm.responses[AgentResponse] = AgentResponse(
+            answer="a", citations=["Databricks Job #4821"]
+        )
+        fake_llm.responses[SynthesisResult] = SynthesisResult(
+            answer="merged", citations=["Databricks Job #4821"]
+        )
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a", "b"])
+
+        report = await run_qa(llm=fake_llm)
+        assert len(report.results) == 12
+        assert report.routing_accuracy == 100.0
+        assert report.hallucination_rate == 0.0

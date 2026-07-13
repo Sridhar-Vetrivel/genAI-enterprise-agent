@@ -1,0 +1,75 @@
+{
+  "jobs": [
+    {
+      "job_id": 4821,
+      "name": "sales_etl",
+      "description": "Nightly ETL for the sales data mart",
+      "schedule": "0 2 * * *",
+      "owner": "data-platform@psiog.example"
+    },
+    {
+      "job_id": 4822,
+      "name": "ingestion_raw_events",
+      "description": "Raw event ingestion into the bronze layer",
+      "schedule": "0 */4 * * *",
+      "owner": "data-platform@psiog.example"
+    },
+    {
+      "job_id": 4830,
+      "name": "crm_sync",
+      "description": "Pushes the curated customer table to the CRM",
+      "schedule": "0 4 * * *",
+      "owner": "data-platform@psiog.example"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": 99141,
+      "job_id": 4821,
+      "job_name": "sales_etl",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-12T02:14:00Z",
+      "end_time": "2026-07-12T02:41:18Z",
+      "duration_seconds": 1638,
+      "error_message": null,
+      "records_written": 1284502
+    },
+    {
+      "run_id": 99150,
+      "job_id": 4822,
+      "job_name": "ingestion_raw_events",
+      "state": "TERMINATED",
+      "result_state": "FAILED",
+      "start_time": "2026-07-12T00:04:00Z",
+      "end_time": "2026-07-12T00:07:52Z",
+      "duration_seconds": 232,
+      "error_message": "SchemaMismatchException: column 'customer_tier' expected StringType but found IntegerType in source file s3://psiog-raw/events/2026-07-12/part-0007.parquet",
+      "records_written": 0
+    },
+    {
+      "run_id": 99163,
+      "job_id": 4830,
+      "job_name": "crm_sync",
+      "state": "TERMINATED",
+      "result_state": "FAILED",
+      "start_time": "2026-07-12T04:00:00Z",
+      "end_time": "2026-07-12T04:01:09Z",
+      "duration_seconds": 69,
+      "error_message": "UpstreamDependencyFailed: source table bronze.raw_events was not refreshed by job 4822 (ingestion_raw_events); 0 rows synced to CRM",
+      "records_written": 0
+    },
+    {
+      "run_id": 99102,
+      "job_id": 4821,
+      "job_name": "sales_etl",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-11T02:14:00Z",
+      "end_time": "2026-07-11T02:39:02Z",
+      "duration_seconds": 1492,
+      "error_message": null,
+      "records_written": 1279884
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+# Secrets and local overrides — every setting is documented in deploy/.env.example
+.env
+.env.*
+!deploy/.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test and lint caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Generated artefacts — rebuild with `make index` / `make qa`
+data/index/
+data/qa_report.json

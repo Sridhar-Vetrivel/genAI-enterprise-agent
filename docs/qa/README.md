@@ -7,13 +7,13 @@ Auto-generated from the last `make qa` run. One page per test query: what was as
 | Metric | Target | Measured |
 |---|---|---|
 | Routing accuracy | 100.0% | **100.0%** |
-| Hallucination rate | &lt;10.0% | **1.96%** |
-| Answers carrying citations | all | **7 / 7** |
-| Claims grounded | — | **50 / 51** |
-| Answers verified by the Judge | all | **7 / 7** |
+| Hallucination rate | &lt;10.0% | **1.82%** |
+| Answers carrying citations | all | **8 / 8** |
+| Claims grounded | — | **54 / 55** |
+| Answers verified by the Judge | all | **8 / 8** |
 | LLM cost | ₹0 | **₹0** (local `gemma3:4b` / `gemma3:1b`) |
 
-Queries completed in this run: **7 / 12**
+Queries completed in this run: **8 / 12**
 
 ## Per-query evidence
 
@@ -26,7 +26,7 @@ Queries completed in this run: **7 / 12**
 | 5 | What is the current deal status for Acme Corp? | `crm` | ✅ `crm` | 1 | 0.0% | [q05.md](q05.md) |
 | 6 | Who is the account owner for TechStart Ltd? | `crm` | ✅ `crm` | 1 | 0.0% | [q06.md](q06.md) |
 | 7 | What is the runbook for when the ingestion pipeline throws a schema mismatch error? | `docs` | ✅ `docs` | 5 | 0.0% | [q07.md](q07.md) |
-| 8 | What does the architecture doc say about the ingestion pipeline? | `docs` | _not yet run_ | — | — | — |
+| 8 | What does the architecture doc say about the ingestion pipeline? | `docs` | ✅ `docs` | 2 | 0.0% | [q08.md](q08.md) |
 | 9 | Did last night's pipeline failure affect any CRM customer sync? | `crm`, `data-platform` | _not yet run_ | — | — | — |
 | 10 | The ingestion job failed - is there a fix in the runbooks? | `data-platform`, `docs` | _not yet run_ | — | — | — |
 | 11 | What's the status of the latest deployment and are there any known issues? | `devops`, `docs` | _not yet run_ | — | — | — |

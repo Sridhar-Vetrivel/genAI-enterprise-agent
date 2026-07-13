@@ -78,9 +78,25 @@ _AGENT_TAG = re.compile(r"\s*[\[(]\s*[a-z][a-z0-9-]*-agent\s*[\])]", re.IGNORECA
 # That is the bias this function is supposed to have.
 _CITATION_KEY = re.compile(r"#\d+|\b[A-Z]{2,}-\d+\b")
 
+# The same records as the ANSWER writes them, which is not how the citation writes them. The
+# model drops the hash: a citation says "run #99163", the prose says "run 99163". Requiring
+# the '#' on both sides made every such citation look CONTRADICTED — the answer named "other"
+# records — and query 12 discussed crm_sync run 99163, deploy-ingestion run 5530 and deal
+# DEAL-7781 while citing none of them.
+#
+# So the answer side matches bare digits too. The punctuation was never the fact; the number
+# is. Three digits minimum, so a version or a count cannot masquerade as a record id.
+_ANSWER_KEY = re.compile(r"#?\b\d{3,}\b|\b[A-Z]{2,}-\d+\b")
+
 
 def _keys(text: str) -> set[str]:
-    return {k.lower() for k in _CITATION_KEY.findall(text)}
+    """The records a CITATION names."""
+    return {k.lstrip("#").lower() for k in _CITATION_KEY.findall(text)}
+
+
+def _spoken_keys(text: str) -> set[str]:
+    """The records an ANSWER names, however it chose to punctuate them."""
+    return {k.lstrip("#").lower() for k in _ANSWER_KEY.findall(text)}
 
 
 def _named_in(answer: str, allowed: list[str]) -> list[str]:
@@ -94,7 +110,7 @@ def _named_in(answer: str, allowed: list[str]) -> list[str]:
     Naming ACC-1002 in the prose is as good as citing it: that record is where the claim
     came from. This only ever adds sources from `allowed`, so it cannot invent one.
     """
-    spoken = _keys(answer)
+    spoken = _spoken_keys(answer)
     return [c for c in allowed if _keys(c) and (_keys(c) & spoken)]
 
 
@@ -179,7 +195,7 @@ def finalize_synthesis(
     cleaned = re.sub(r"\s*\[([^\]]{3,120})\]", _is_reference, cleaned)
     cleaned = _tidy(cleaned)
 
-    spoken = _keys(cleaned)  # every record id the answer actually asserts
+    spoken = _spoken_keys(cleaned)  # every record the answer names, hash or no hash
     kept: list[str] = []
 
     for citation in supplied:

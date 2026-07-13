@@ -578,7 +578,9 @@ class TestDocumentCitationsSurvive:
     def test_real_record_ids_are_still_recognised(self) -> None:
         from psiog_kendra.prompting import _keys
 
-        assert _keys("Databricks Job #4830 (crm_sync) run #99163") == {"#4830", "#99163"}
+        # Normalised without the hash: the citation writes "#99163", the prose writes
+        # "99163", and the number is the fact — not the punctuation around it.
+        assert _keys("Databricks Job #4830 (crm_sync) run #99163") == {"4830", "99163"}
         assert _keys("CRM account ACC-1001 (Acme Corp)") == {"acc-1001"}
         assert _keys("CRM deal DEAL-7781 (Acme Corp)") == {"deal-7781"}
 
@@ -627,3 +629,53 @@ class TestDanglingReference:
         # The clause is only dangling when it has nothing after it.
         answer, _ = finalize_synthesis(text, [], ALLOWED)
         assert answer == text
+
+
+class TestTheModelDropsTheHash:
+    """A citation writes "run #99163"; the prose writes "run 99163". Requiring the hash on
+    both sides made every such citation look CONTRADICTED, and QA query 12 discussed
+    crm_sync run 99163, deploy-ingestion run 5530 and deal DEAL-7781 while citing none."""
+
+    SUPPLIED = [
+        "Databricks Job #4830 (crm_sync) run #99163",
+        "GitHub Actions run #5530 (deploy-ingestion, commit c40be71)",
+        "CRM deal DEAL-7781 (Acme Corp)",
+        "incident-2026-07-12-ingestion-failure.md § Known Issues",
+    ]
+
+    def test_a_record_named_without_its_hash_is_still_cited(self) -> None:
+        answer = (
+            "The crm_sync job (run 99163) failed. The deploy-ingestion pipeline (run 5530) "
+            "failed its gates. Deal DEAL-7781 remains in Negotiation."
+        )
+        _, citations = finalize_synthesis(answer, [], self.SUPPLIED)
+        assert citations == self.SUPPLIED  # all four, including the document
+
+    def test_the_mismatched_citation_guard_still_holds_without_hashes(self) -> None:
+        # The guard that matters must not be weakened by the looser match: an answer about
+        # run 99163 is still never served citing the unrelated GitHub build.
+        allowed = [
+            "Databricks Job #4830 (crm_sync) run #99163",
+            "GitHub Actions run #5530 (deploy-ingestion, commit c40be71)",
+        ]
+        _, citations = finalize_synthesis(
+            "The crm_sync job failed on run 99163.", [allowed[1]], allowed
+        )
+        assert citations == [allowed[0]]
+
+    def test_a_two_digit_number_is_not_a_record_id(self) -> None:
+        # "74% coverage", "12 accounts" — three digits minimum, so a count cannot masquerade
+        # as a record id and drag in an unrelated citation.
+        from psiog_kendra.prompting import _spoken_keys
+
+        assert _spoken_keys("Coverage was 74% across 12 gates.") == set()
+        assert _spoken_keys("Run 99163 failed.") == {"99163"}
+
+    def test_the_specialist_path_matches_hashless_records_too(self) -> None:
+        allowed = [
+            "CRM deal DEAL-7781 (Acme Corp)",
+            "CRM account ACC-1001 (Acme Corp)",
+        ]
+        answer = "Deal DEAL-7781 for account ACC-1001 is in Negotiation."
+        _, citations = finalize(answer, [], allowed)
+        assert set(citations) == set(allowed)

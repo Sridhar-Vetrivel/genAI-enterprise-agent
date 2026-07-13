@@ -162,19 +162,23 @@ class Coordinator:
             only = next(iter(answers.values()))
             return only.answer, only.citations
 
-        # The reports are introduced in prose, not tagged "[data-agent]". A bracketed tag is
-        # an invitation: gemma3 copied them straight into the answer — "...zero rows synced
-        # to CRM [data-agent]. Consequently, accounts ... were affected [crm-agent]."
+        # Every label in this prompt has been copied into an answer at least once. First it
+        # was the bracketed agent tag ("...zero rows synced to CRM [data-agent]"), so that
+        # went. Its replacement, a "Sources it used:" line, came back as an unterminated
+        # "...column type [Sources. To resolve this..." — the model will echo ANY heading it
+        # is given. So nothing here is headed like a field: the reports are plain sentences,
+        # and finalize_synthesis scrubs whatever still leaks. Prompt discipline alone has
+        # never held at this model size; the strip is the part that actually holds.
         reports = "\n\n".join(
-            f"The {agent_for(d)} reports:\n{a.answer}\n"
-            f"Sources it used: {', '.join(a.citations) or 'none'}"
+            f"The {agent_for(d)} looked into this and found:\n{a.answer}\n"
+            f"It read {', '.join(a.citations) or 'nothing'}."
             for d, a in answers.items()
         )
         user = (
             f"User question: {query}\n\n"
             f"{reports}\n\n"
-            f"Write the unified answer. Put the sources in the citations field — never write "
-            f"a source, or a specialist's name, into the answer text."
+            f"Write the unified answer as plain prose for a colleague. Name no specialist and "
+            f"no source in the answer text — the sources go in the citations field, nowhere else."
         )
         try:
             result = await self._llm.structured(

@@ -36,8 +36,13 @@ _LEAK_MARKERS = (
 # Section-name placeholders the model sometimes emits in place of a real citation, e.g.
 # "...part-0007.parquet [CITATIONS]." The brackets are required: a bare word like "records"
 # is ordinary prose ("...affecting CRM records.") and must never be stripped.
+# The closing bracket is OPTIONAL, and that is the whole point. gemma3 wrote an UNTERMINATED
+# one into the prose — "...a mismatch in the `customer_tier` column type [Sources. To resolve
+# this..." — which sailed straight through a pattern that demanded a matching "]", and took
+# the grounding judge's claim-splitting down with it. The section word must follow the bracket
+# immediately, so ordinary prose ("[see the runbook]") is untouched.
 _PLACEHOLDER = re.compile(
-    r"\s*(?:\[\s*(?:CITATIONS?|FACTS?|SOURCES?|EXCERPTS?|RECORDS?)\s*\]"
+    r"\s*(?:\[\s*(?:CITATIONS?|FACTS?|SOURCES?|EXCERPTS?|RECORDS?)\s*\]?"
     r"|<{2,}\s*(?:CITATIONS?|FACTS?|SOURCES?|EXCERPTS?|RECORDS?)\s*>{0,})",
     re.IGNORECASE,
 )

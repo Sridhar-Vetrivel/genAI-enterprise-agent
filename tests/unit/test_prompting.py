@@ -461,3 +461,36 @@ class TestSynthesisInlineCitations:
         text = "The job failed [see the runbook] before the sync."
         answer, _ = finalize_synthesis(text, [], self.SUPPLIED)
         assert answer == text
+
+
+class TestUnterminatedPlaceholder:
+    """The closing bracket is optional in _PLACEHOLDER, and that is the whole point."""
+
+    def test_an_unterminated_section_placeholder_is_stripped(self) -> None:
+        # The real leak, from QA query 10: "...a mismatch in the `customer_tier` column
+        # type [Sources. To resolve this..." — no closing bracket, so a pattern demanding a
+        # matching "]" let it straight through, and it took the judge's claim-splitting with
+        # it. Every heading given to this model has eventually come back in the prose.
+        cleaned = clean_answer(
+            "The job failed on a customer_tier mismatch [Sources. To resolve this, "
+            "follow the runbook [Sources."
+        )
+        assert "[Sources" not in cleaned
+        assert (
+            cleaned
+            == "The job failed on a customer_tier mismatch. To resolve this, follow the runbook."
+        )
+
+    @pytest.mark.parametrize("token", ["[Sources", "[SOURCES", "[Citations", "[Facts", "[Records"])
+    def test_every_unterminated_form_is_stripped(self, token: str) -> None:
+        assert "[" not in clean_answer(f"An answer {token}.")
+
+    def test_ordinary_bracketed_prose_still_survives(self) -> None:
+        # The section word has to follow the bracket immediately, so real asides are safe.
+        text = "The job failed [see the runbook] before the sync."
+        assert clean_answer(text) == text
+
+    def test_a_source_named_in_prose_is_not_a_placeholder(self) -> None:
+        # "sources" as an ordinary word, unbracketed, must never be touched.
+        text = "The runbook lists three sources for the failure."
+        assert clean_answer(text) == text

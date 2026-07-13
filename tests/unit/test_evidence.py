@@ -130,6 +130,42 @@ class TestBuildEvidence:
         assert "q01.md" in written and "README.md" in written
         assert (settings().evidence_dir / "q01.md").exists()
 
+    def test_a_page_from_a_superseded_run_is_deleted(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The bug this guards: q04.md survived from a run whose judge was later found to be
+        # scoring citation labels as hallucinations. The report was regenerated with only
+        # q01 in it, and the stale q04 page — carrying 16.67% from superseded code — stayed
+        # in docs/qa/ and got committed. A stale page is worse than a missing one: it reads
+        # as current evidence and gets pasted into the submission.
+        out_dir = tmp_path / "qa"
+        out_dir.mkdir()
+        stale = out_dir / "q04.md"
+        stale.write_text("# Q04 — stale numbers from a superseded run")
+
+        report_path = tmp_path / "qa_report.json"
+        report_path.write_text(json.dumps(QAReport([QueryResult(**_qr())]).to_dict()))
+        monkeypatch.setenv("QA_REPORT_PATH", str(report_path))
+        monkeypatch.setenv("EVIDENCE_DIR", str(out_dir))
+        reset_settings()
+
+        _, written = build_evidence()
+        assert not stale.exists()
+        assert "q04.md" not in written
+        assert (out_dir / "q01.md").exists()
+
+    def test_the_index_is_not_deleted_as_stale(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        report_path = tmp_path / "qa_report.json"
+        report_path.write_text(json.dumps(QAReport([QueryResult(**_qr())]).to_dict()))
+        monkeypatch.setenv("QA_REPORT_PATH", str(report_path))
+        monkeypatch.setenv("EVIDENCE_DIR", str(tmp_path / "qa"))
+        reset_settings()
+
+        build_evidence()
+        assert (settings().evidence_dir / "README.md").exists()
+
     def test_missing_report_is_a_clear_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("QA_REPORT_PATH", "/nonexistent/qa_report.json")
         reset_settings()

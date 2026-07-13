@@ -321,6 +321,13 @@ def build_evidence() -> tuple[int, list[str]]:
         path.write_text(render_query(result))
         written.append(path.name)
 
+    # Delete pages left over from an earlier run. Without this, a query that has not yet
+    # re-run keeps its stale page — and a page carrying numbers from superseded code is
+    # worse than a missing one, because it looks like current evidence and gets submitted.
+    for stale in out_dir.glob("q[0-9][0-9].md"):
+        if stale.name not in written:
+            stale.unlink()
+
     (out_dir / "README.md").write_text(render_index(report))
     written.append("README.md")
     return len(written), written

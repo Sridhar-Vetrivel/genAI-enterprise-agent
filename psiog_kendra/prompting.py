@@ -42,6 +42,37 @@ _PLACEHOLDER = re.compile(
     re.IGNORECASE,
 )
 
+# Record identifiers — job ids, run ids, build numbers. Every system in scope writes them
+# with a leading '#', in the citation strings AND in the prose ("run #99150"), which is what
+# makes them usable as a cross-check. The '#' is load-bearing: matching bare digits would
+# make the year in "2026-07-12" collide with a job id.
+_RECORD_ID = re.compile(r"#(\d+)")
+
+
+def _record_ids(text: str) -> set[str]:
+    return set(_RECORD_ID.findall(text))
+
+
+def _supported_by(answer: str, allowed: list[str]) -> list[str]:
+    """The sources an answer's own identifiers entitle it to cite.
+
+    The model cannot be trusted to report which record it used. It returned an answer wholly
+    about job #4822 run #99150 and cited "Databricks Job #4830 (crm_sync) run #99163" — a real
+    source, from the right system, that had nothing to do with what it had just written.
+
+    So the answer's text is the arbiter. A citation whose record ids appear nowhere in the
+    prose is contradicted by it, and is dropped. Two deliberate exemptions:
+
+    * A citation carrying no ids at all (a doc section, a CRM account) cannot be contradicted
+      this way, so it is always kept — absence of evidence is not evidence of mismatch.
+    * An answer citing no ids at all (a prose summary, a runbook answer) proves nothing about
+      any citation, so every source stays eligible.
+    """
+    answer_ids = _record_ids(answer)
+    if not answer_ids:
+        return list(allowed)
+    return [c for c in allowed if not _record_ids(c) or (_record_ids(c) & answer_ids)]
+
 
 def build_grounded_prompt(
     *,
@@ -91,11 +122,13 @@ def finalize(answer: str, model_citations: list[str], allowed: list[str]) -> tup
       [Databricks Job #4822 ...]" -> lifted out of the prose and counted as a citation.
     * The model returns a citation that is not one we supplied -> dropped.
 
-    The last one is why a blind `or allowed[:1]` fallback was removed: it once attached
-    "Databricks Job #4830 (crm_sync)" to an answer that was entirely about job #4822.
-    A citation that does not match the answer is worse than no citation, because it
-    looks grounded and is not. So the answer's own text is searched first, and the
-    positional fallback only applies when nothing at all can be established.
+    The third is the dangerous one, and an allow-list alone does not catch it: the model
+    returned an answer entirely about job #4822 run #99150 and cited "Databricks Job #4830
+    (crm_sync) run #99163" — a source that was on the allow-list, and had nothing to do with
+    what it had just written. A citation that does not match the answer is worse than no
+    citation, because it looks grounded and is not. So the answer's own record ids are
+    checked against each citation (see `_supported_by`), and the model's claim is only
+    trusted where the text corroborates it.
     """
     cleaned = clean_answer(answer)
 
@@ -114,14 +147,27 @@ def finalize(answer: str, model_citations: list[str], allowed: list[str]) -> tup
     cleaned = re.sub(r"\(\s*\)|\[\s*\]", "", cleaned)  # empty brackets left behind
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)  # " ." -> "."
+    # The model likes to set a citation off with commas — "The deployment, [run #5512],
+    # completed" — and lifting it out strands them: "The deployment,, completed".
+    cleaned = re.sub(r"([,;:])(?:\s*[,;:])+", r"\1", cleaned)  # ",," -> ","
+    cleaned = re.sub(r"[,;:]+\s*([.!?])", r"\1", cleaned)  # ",." -> "."
 
-    valid = [c for c in model_citations if c in allowed]
-    citations = list(dict.fromkeys(valid + inline))
+    # Only sources the answer's own identifiers do not contradict are eligible. Note this is
+    # measured on the prose AFTER the inline citations are lifted out, so a citation cannot
+    # corroborate itself — and an inline citation is checked like any other. The model has
+    # been seen writing a contradicting citation directly into the sentence:
+    #   "...found an IntegerType in the source file [Databricks Job #4830 (crm_sync) ...]."
+    # in an answer whose every fact came from job #4822. Lifting a citation out of the prose
+    # tells us the model MEANT to cite it; it does not make the citation correct.
+    supported = _supported_by(cleaned, allowed)
+    claimed = list(dict.fromkeys(inline + [c for c in model_citations if c in allowed]))
+    citations = [c for c in claimed if c in supported]
 
-    if not citations and allowed:
-        # Nothing could be established from the model's output at all. Fall back to the
-        # top-ranked source rather than serve an uncited answer, but this is a last resort.
-        citations = allowed[:1]
+    if not citations and supported:
+        # The model named nothing usable — every citation it offered was invented, or
+        # contradicted by the text it had just written. Prefer a source the answer actually
+        # points at over the model's word; fall back positionally only if it points nowhere.
+        citations = supported[:1]
 
     return cleaned, citations
 

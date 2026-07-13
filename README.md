@@ -14,7 +14,7 @@ Psiog's engineering, data, and operations teams work across a fragmented technol
 
 | Agent | Domain | Data Source |
 |---|---|---|
-| `coordinator` | Classifies intent, routes to specialist(s), synthesizes the final answer | LLM (via OpenRouter) |
+| `coordinator` | Classifies intent, routes to specialist(s), synthesizes the final answer | LLM (local Ollama; OpenRouter once provisioned) |
 | `data-agent` | Data platform | Databricks REST API (Jobs, SQL Warehouses) |
 | `devops-agent` | CI/CD | GitHub Actions / Azure DevOps REST API |
 | `crm-agent` | Customer data | CRM REST API (HubSpot free tier / mock) |
@@ -96,7 +96,8 @@ for the week-by-week plan and what remains for Weeks 11–17.
 ## Tech Stack
 
 - **Orchestration:** AgentField (Apache 2.0, self-hosted via Docker Compose) — coordinator/specialist agents, built-in vector memory, automatic call tracing as a DAG
-- **LLM inference:** OpenRouter (primary, e.g. `google/gemini-2.5-flash`) with Ollama + Llama 4 Scout as a zero-cost local fallback — swappable via env var, no code changes
+- **LLM inference:** **Ollama, fully local, ₹0** — `gemma3:4b` for the hard calls (routing, synthesis, judging), `gemma3:1b` for the simple ones, `nomic-embed-text` for embeddings. OpenRouter (`google/gemini-2.5-flash`) is the intended primary but is **not yet provisioned**, so nothing in this build depends on it. Every model is swappable via env var, no code changes.
+  - The approved proposal named **Llama 4 Scout** as the local model; the machine actually has **Gemma 3**. Recorded as a deviation in [Implementation.md](Implementation.md).
 - **Structured output:** Pydantic schemas (`extra="forbid"`) for every LLM response — machine-verifiable for QA
 - **Hosting:** Azure B1s VM (12-month free tier)
 - **QA:** Pytest, GitHub Actions CI, an LLM Judge Agent for hallucination detection

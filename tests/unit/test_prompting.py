@@ -219,6 +219,73 @@ class TestFinalize:
         assert "[]" not in answer and "( )" not in answer
         assert answer == "The job failed."
 
+    def test_a_citation_contradicted_by_the_answers_own_ids_is_replaced(self) -> None:
+        # The real failure, from QA query 2. gemma3 answered entirely about job #4822
+        # run #99150, then cited job #4830 — a genuine source, on the allow-list, that it
+        # had not used. The allow-list check passed it. Only the answer's own record ids
+        # catch this, and a mismatched citation is the worst outcome the system has.
+        answer, citations = finalize(
+            "The last failed Databricks job was job #4822 (ingestion_raw_events) run #99150. "
+            "It failed with a SchemaMismatchException on customer_tier.",
+            [ALLOWED[1]],  # the model's citation: job #4830, which it never used
+            ALLOWED,
+        )
+        assert citations == [ALLOWED[0]]  # the #4822 source the answer actually describes
+        assert ALLOWED[1] not in citations
+
+    def test_an_inline_citation_contradicted_by_the_prose_is_not_trusted(self) -> None:
+        # The real failure, caught live. gemma3 wrote the wrong citation INTO the sentence:
+        #   "...found an IntegerType in the source file [Databricks Job #4830 (crm_sync)...]"
+        # in an answer whose every fact came from job #4822. Lifting a citation out of the
+        # prose proves the model MEANT to cite it — not that the citation is right. So the
+        # lift is subject to the same corroboration check as everything else.
+        answer, citations = finalize(
+            "The last failed Databricks job was job #4822 (ingestion_raw_events) run #99150. "
+            f"It failed on a SchemaMismatchException [{ALLOWED[1]}].",
+            [],
+            ALLOWED,
+        )
+        assert ALLOWED[1] not in answer  # still lifted out of the prose
+        assert citations == [ALLOWED[0]]  # ... but corrected to the source actually used
+
+    def test_a_citation_cannot_corroborate_itself(self) -> None:
+        # The ids are read from the prose AFTER the inline citation is removed. Otherwise
+        # "[Databricks Job #4830 ...]" would supply the very #4830 that vindicates it.
+        _, citations = finalize(f"The job failed on job #4822 [{ALLOWED[1]}].", [], ALLOWED)
+        assert citations == [ALLOWED[0]]
+
+    def test_a_citation_with_no_record_ids_is_never_contradicted(self) -> None:
+        # A doc section or CRM account carries no "#nnn" id, so it cannot be checked this
+        # way — and absence of evidence is not evidence of mismatch. It must survive.
+        docs = ["runbook-etl-failures.md § Rollback", "CRM Account: Acme Corp"]
+        _, citations = finalize("Rollback is covered in the runbook for job #4822.", docs, docs)
+        assert citations == docs
+
+    def test_an_answer_with_no_record_ids_keeps_the_models_citation(self) -> None:
+        # Prose answers ("the deployment passed all quality gates") assert no ids, so they
+        # prove nothing about any citation. Every source stays eligible.
+        _, citations = finalize("The deployment passed all quality gates.", [ALLOWED[1]], ALLOWED)
+        assert citations == [ALLOWED[1]]
+
+    def test_a_date_in_the_answer_is_not_mistaken_for_a_record_id(self) -> None:
+        # The '#' in the id pattern is load-bearing: matching bare digits would let the
+        # year in "2026-07-12" corroborate any citation that happened to contain "2026".
+        _, citations = finalize("The run completed on 2026-07-12.", [ALLOWED[1]], ALLOWED)
+        assert citations == [ALLOWED[1]]  # no ids asserted -> the model is still trusted
+
+    def test_duplicated_punctuation_left_by_the_strip_is_collapsed(self) -> None:
+        # The bug this guards, from QA query 3: the model set the citation off with commas,
+        # and lifting it out stranded them -> "The deployment,, completed successfully."
+        answer, _ = finalize(
+            f"The deployment, [{ALLOWED[0]}], completed successfully.", [], ALLOWED
+        )
+        assert ",," not in answer
+        assert answer == "The deployment, completed successfully."
+
+    def test_a_trailing_comma_before_the_full_stop_is_removed(self) -> None:
+        answer, _ = finalize(f"The job succeeded, [{ALLOWED[0]}].", [], ALLOWED)
+        assert answer == "The job succeeded."
+
     def test_scaffolding_and_inline_citation_are_both_removed(self) -> None:
         answer, citations = finalize(
             f"The job failed. [{ALLOWED[0]}] Citation strings you may use: blah",

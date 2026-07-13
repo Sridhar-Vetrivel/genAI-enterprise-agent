@@ -64,11 +64,19 @@ def _record_ids(text: str) -> set[str]:
 # splitting on top.
 _AGENT_TAG = re.compile(r"\s*[\[(]\s*[a-z][a-z0-9-]*-agent\s*[\])]", re.IGNORECASE)
 
-# Anything in a citation that could identify the record it names: "#99163", "ACC-1002",
-# "2026-07-11T04:02:00Z". Unlike _record_ids this does not require a '#', because a CRM
-# account is cited as "ACC-1002" with no hash. It is only ever matched WHOLE, so the year
-# in a date cannot masquerade as an id.
-_CITATION_KEY = re.compile(r"[a-z0-9][a-z0-9:._-]*[0-9][a-z0-9:._-]*", re.IGNORECASE)
+# A RECORD identifier, and nothing else: "#99163" (a job, run or build) or "ACC-1002" /
+# "DEAL-7781" (a CRM record). Case-sensitive on the uppercase prefix, and that matters.
+#
+# An earlier version matched any token containing a digit, which quietly swept up document
+# filenames — "runbook-12-schema-mismatch.md" looked like an identifier because of the "12".
+# A citation with a key must be NAMED in the answer to survive, and prose never repeats a
+# filename, so every docs citation was dropped: query 10 answered with the runbook's recovery
+# steps and cited only the Databricks job. Half the answer, uncited — a grounding failure
+# wearing a PASS.
+#
+# A document has no record id, so it can never be contradicted this way and is always kept.
+# That is the bias this function is supposed to have.
+_CITATION_KEY = re.compile(r"#\d+|\b[A-Z]{2,}-\d+\b")
 
 
 def _keys(text: str) -> set[str]:
@@ -144,21 +152,44 @@ def finalize_synthesis(
     cleaned = _AGENT_TAG.sub("", clean_answer(answer))
     cleaned, inline = _lift_inline(cleaned, supplied)
 
-    # A bracketed aside whose identifiers belong to a source is a citation the model has
+    # A bracketed aside whose numbers belong to a source is a citation the model has
     # paraphrased ("[Nightly crm_sync run 99163]"), not something it is telling the reader.
-    supplied_keys = {k for c in supplied for k in _keys(c)}
+    # Bare digits are used here, not _keys: the paraphrase drops the '#' that makes an id an
+    # id, which is exactly what makes it a paraphrase.
+    supplied_digits = {d for c in supplied for d in re.findall(r"\d{3,}", c)}
 
     def _is_reference(match: re.Match[str]) -> str:
-        return " " if _keys(match.group(1)) & supplied_keys else match.group(0)
+        digits = set(re.findall(r"\d{3,}", match.group(1)))
+        return " " if digits & supplied_digits else match.group(0)
 
     cleaned = re.sub(r"\s*\[([^\]]{3,120})\]", _is_reference, cleaned)
     cleaned = _tidy(cleaned)
 
-    named = [c for c in model_citations if c in supplied]
-    spoken = _named_in(cleaned, supplied)
-    unidentifiable = [c for c in supplied if not _keys(c)]  # doc sections: cannot be checked
+    spoken = _keys(cleaned)  # every record id the answer actually asserts
+    kept: list[str] = []
 
-    kept = [c for c in supplied if c in inline or c in named or c in spoken or c in unidentifiable]
+    for citation in supplied:
+        keys = _keys(citation)
+
+        if not keys:
+            # A document. It has no record id, so the answer's identifiers can neither
+            # confirm nor contradict it — and prose never repeats a filename. Always kept.
+            kept.append(citation)
+        elif keys & spoken or citation in inline:
+            # The answer names this record, or wrote the citation into the prose.
+            kept.append(citation)
+        elif not spoken:
+            # The answer asserts no record id at all, so there is nothing that could
+            # contradict this source. The specialist was dispatched because the question
+            # needed it and its report is the material this answer was built from, so it
+            # stays. The bias is towards keeping — an uncited claim is the failure mode that
+            # matters here, and a source the model merely forgot to name is still its source.
+            kept.append(citation)
+        # Otherwise: the answer names OTHER records and not this one. It is contradicted, and
+        # it is dropped even if the model insisted on it — the guard that stops an answer
+        # about job #4822 being served citing job #4830.
+
+    # An invented citation never reaches this list: `supplied` is the only source of truth.
     return cleaned, kept or supplied
 
 

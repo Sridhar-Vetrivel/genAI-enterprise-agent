@@ -543,3 +543,53 @@ class TestJsonWreckage:
     def test_prose_without_braces_is_untouched(self) -> None:
         text = "The job failed on s3://psiog-raw/events/part-0007.parquet at 02:14 UTC."
         assert clean_answer(text) == text
+
+
+class TestDocumentCitationsSurvive:
+    """A document has no record id, so it can never be contradicted by the answer's own
+    identifiers — and must always be kept. An earlier key pattern matched any token with a
+    digit in it, which swept up filenames."""
+
+    SUPPLIED = [
+        "Databricks Job #4822 (ingestion_raw_events) run #99150",
+        "runbook-12-schema-mismatch.md § Recovery Steps",
+        "incident-2026-07-12-ingestion-failure.md § Actions",
+    ]
+
+    def test_a_runbook_is_cited_even_though_the_prose_never_names_the_file(self) -> None:
+        # The real failure, from QA query 10. The quarantine-and-rerun steps come straight
+        # from the runbook, and the answer cited only the Databricks job: half the answer
+        # uncited, in a query whose whole point is joining a live failure to a documented
+        # fix. It reported PASS.
+        answer = (
+            "The ingestion job (run #99150) failed with a SchemaMismatchException. To resolve "
+            "this, quarantine the offending file and re-run Databricks Job #4822."
+        )
+        _, citations = finalize_synthesis(answer, [self.SUPPLIED[0]], self.SUPPLIED)
+        assert citations == self.SUPPLIED  # all three, including both documents
+
+    def test_a_filename_is_not_a_record_identifier(self) -> None:
+        # "runbook-12-schema-mismatch.md" is not an id just because it contains a 12.
+        from psiog_kendra.prompting import _keys
+
+        assert _keys("runbook-12-schema-mismatch.md § Recovery Steps") == set()
+        assert _keys("incident-2026-07-12-ingestion-failure.md § Actions") == set()
+
+    def test_real_record_ids_are_still_recognised(self) -> None:
+        from psiog_kendra.prompting import _keys
+
+        assert _keys("Databricks Job #4830 (crm_sync) run #99163") == {"#4830", "#99163"}
+        assert _keys("CRM account ACC-1001 (Acme Corp)") == {"acc-1001"}
+        assert _keys("CRM deal DEAL-7781 (Acme Corp)") == {"deal-7781"}
+
+    def test_a_contradicted_record_is_still_dropped(self) -> None:
+        # The narrower pattern must not weaken the check that matters: an answer about job
+        # #4822 is still never served citing job #4830.
+        supplied = [
+            "Databricks Job #4822 (ingestion_raw_events) run #99150",
+            "Databricks Job #4830 (crm_sync) run #99163",
+        ]
+        _, citations = finalize_synthesis(
+            "The failure was in job #4822 run #99150.", [supplied[1]], supplied
+        )
+        assert citations == [supplied[0]]

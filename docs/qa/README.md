@@ -7,13 +7,13 @@ Auto-generated from the last `make qa` run. One page per test query: what was as
 | Metric | Target | Measured |
 |---|---|---|
 | Routing accuracy | 100.0% | **100.0%** |
-| Hallucination rate | &lt;10.0% | **2.7%** |
-| Answers carrying citations | all | **5 / 5** |
-| Claims grounded | — | **36 / 37** |
-| Answers verified by the Judge | all | **5 / 5** |
+| Hallucination rate | &lt;10.0% | **2.44%** |
+| Answers carrying citations | all | **6 / 6** |
+| Claims grounded | — | **40 / 41** |
+| Answers verified by the Judge | all | **6 / 6** |
 | LLM cost | ₹0 | **₹0** (local `gemma3:4b` / `gemma3:1b`) |
 
-Queries completed in this run: **5 / 12**
+Queries completed in this run: **6 / 12**
 
 ## Per-query evidence
 
@@ -24,7 +24,7 @@ Queries completed in this run: **5 / 12**
 | 3 | Did the latest deployment of the payments service pass all quality gates? | `devops` | ✅ `devops` | 1 | 8.33% | [q03.md](q03.md) |
 | 4 | What was the last deployment date for the auth service? | `devops` | ✅ `devops` | 1 | 0.0% | [q04.md](q04.md) |
 | 5 | What is the current deal status for Acme Corp? | `crm` | ✅ `crm` | 1 | 0.0% | [q05.md](q05.md) |
-| 6 | Who is the account owner for TechStart Ltd? | `crm` | _not yet run_ | — | — | — |
+| 6 | Who is the account owner for TechStart Ltd? | `crm` | ✅ `crm` | 1 | 0.0% | [q06.md](q06.md) |
 | 7 | What is the runbook for when the ingestion pipeline throws a schema mismatch error? | `docs` | _not yet run_ | — | — | — |
 | 8 | What does the architecture doc say about the ingestion pipeline? | `docs` | _not yet run_ | — | — | — |
 | 9 | Did last night's pipeline failure affect any CRM customer sync? | `crm`, `data-platform` | _not yet run_ | — | — | — |

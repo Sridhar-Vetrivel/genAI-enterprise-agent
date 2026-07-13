@@ -15,6 +15,7 @@ from psiog_kendra.qa.report import (
     QueryResult,
     evaluate_query,
     load_previous_results,
+    rejudge,
     render,
     run_qa,
 )
@@ -433,12 +434,12 @@ class TestRunQA:
             domains=sorted(next(q.expected_domains for q in TEST_QUERIES if q.query in user))
         )
         fake_llm.responses[AgentResponse] = AgentResponse(
-            answer="a", citations=["Databricks Job #4821"]
+            answer=ANSWER, citations=["Databricks Job #4821"]
         )
         fake_llm.responses[SynthesisResult] = SynthesisResult(
-            answer="merged", citations=["Databricks Job #4821"]
+            answer=ANSWER, citations=["Databricks Job #4821"]
         )
-        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a", "b"])
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=CLAIMS)
 
         report = await run_qa(llm=fake_llm)
         assert len(report.results) == 12
@@ -458,7 +459,7 @@ class TestResume:
                 expected_domains=list(by_id(i).expected_domains),
                 actual_domains=list(by_id(i).expected_domains),
                 routed_correctly=True,
-                answer="from the previous run",
+                answer=ANSWER,
                 citations=["Databricks Job #4821"],
                 grounded_claim_texts=["a"],
                 judged=True,
@@ -476,7 +477,7 @@ class TestResume:
         self._seed(tmp_path, monkeypatch, [1, 2])
         previous = load_previous_results()
         assert set(previous) == {1, 2}
-        assert previous[1].answer == "from the previous run"
+        assert previous[1].answer == ANSWER
 
     async def test_resume_skips_completed_queries_and_runs_the_rest(
         self, fake_llm: FakeLLM, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -499,7 +500,7 @@ class TestResume:
 
         assert [r.id for r in report.results] == [1, 2, 3, 4]
         # Q1 and Q2 came off disk untouched; Q3 and Q4 were actually run.
-        assert report.results[0].answer == "from the previous run"
+        assert report.results[0].answer == ANSWER
         assert report.results[2].answer == "fresh"
 
     async def test_without_resume_every_query_is_run_again(
@@ -519,7 +520,37 @@ class TestResume:
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a"])
 
         report = await run_qa(llm=fake_llm, queries=TEST_QUERIES[:2])
-        assert all(r.answer != "from the previous run" for r in report.results)
+        assert all(r.answer != ANSWER for r in report.results)
+
+    async def test_rejudge_regrades_the_stored_answers_without_asking_them_again(
+        self, fake_llm: FakeLLM, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Every judge bug so far changed how answers are SCORED, not how they are produced.
+        # Re-running the copilot to pick one up reproduces answers we already have on disk,
+        # verbatim, at five LLM calls a query. Re-judging is one.
+        self._seed(tmp_path, monkeypatch, [1, 2, 3])
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["The sales_etl pipeline succeeded"],
+            ungrounded_claims=["It wrote 9999999 records"],
+        )
+
+        report = await rejudge(llm=fake_llm)
+
+        assert len(report.results) == 3
+        # The answers are untouched — only the verdicts are new.
+        assert all(r.answer == ANSWER for r in report.results)
+        assert report.hallucination_rate == 50.0
+        # The copilot was never invoked: only the judge ran, once per stored answer.
+        assert all(call["schema"] == "JudgeVerdict" for call in fake_llm.calls)
+        assert len(fake_llm.calls) == 3
+
+    async def test_rejudge_with_no_stored_answers_is_a_clear_error(
+        self, fake_llm: FakeLLM, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_REPORT_PATH", str(tmp_path / "absent.json"))
+        reset_settings()
+        with pytest.raises(SystemExit, match="no answers to re-judge"):
+            await rejudge(llm=fake_llm)
 
     def test_a_corrupt_report_resumes_from_nothing_rather_than_crashing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

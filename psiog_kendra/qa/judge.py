@@ -100,7 +100,48 @@ def strip_citation_echoes(claims: list[str], citations: list[str]) -> list[str]:
 
 # Words that carry no subject matter, so overlapping on them means nothing.
 _STOPWORDS = frozenset(
-    ["the", "a", "an", "is", "was", "are", "were", "be", "been", "of", "in", "on", "at", "to", "for", "and", "or", "but", "it", "its", "this", "that", "these", "those", "with", "from", "by", "as", "all", "any", "not", "no", "yes", "has", "have", "had", "there", "their", "which", "who"]
+    [
+        "the",
+        "a",
+        "an",
+        "is",
+        "was",
+        "are",
+        "were",
+        "be",
+        "been",
+        "of",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "and",
+        "or",
+        "but",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "with",
+        "from",
+        "by",
+        "as",
+        "all",
+        "any",
+        "not",
+        "no",
+        "yes",
+        "has",
+        "have",
+        "had",
+        "there",
+        "their",
+        "which",
+        "who",
+    ]
 )
 
 # Tokens keep their internal dots, underscores and hyphens, so "priya.n", "sales_etl" and
@@ -109,9 +150,10 @@ _TOKEN = re.compile(r"[a-z0-9][a-z0-9._:\-]*")
 
 
 def _content_words(text: str) -> list[str]:
-    return [
-        t for t in _TOKEN.findall(text.lower()) if len(t) >= 3 and t.strip("._:-") not in _STOPWORDS
-    ]
+    # Strip punctuation from the ENDS only. "records." must match "records", while the dots
+    # and underscores INSIDE "priya.n" and "sales_etl" are part of the identifier and stay.
+    words = (t.strip("._:-") for t in _TOKEN.findall(text.lower()))
+    return [w for w in words if len(w) >= 3 and w not in _STOPWORDS]
 
 
 def claims_the_answer_actually_makes(

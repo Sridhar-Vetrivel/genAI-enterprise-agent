@@ -7,13 +7,13 @@ Auto-generated from the last `make qa` run. One page per test query: what was as
 | Metric | Target | Measured |
 |---|---|---|
 | Routing accuracy | 100.0% | **100.0%** |
-| Hallucination rate | &lt;10.0% | **3.23%** |
-| Answers carrying citations | all | **5 / 5** |
-| Claims grounded | — | **30 / 31** |
-| Answers verified by the Judge | all | **5 / 5** |
+| Hallucination rate | &lt;10.0% | **4.0%** |
+| Answers carrying citations | all | **9 / 9** |
+| Claims grounded | — | **48 / 50** |
+| Answers verified by the Judge | all | **9 / 9** |
 | LLM cost | ₹0 | **₹0** (local `gemma3:4b` / `gemma3:1b`) |
 
-Queries completed in this run: **5 / 12**
+Queries completed in this run: **9 / 12**
 
 ## Per-query evidence
 
@@ -24,10 +24,10 @@ Queries completed in this run: **5 / 12**
 | 3 | Did the latest deployment of the payments service pass all quality gates? | `devops` | ✅ `devops` | 1 | 8.33% | [q03.md](q03.md) |
 | 4 | What was the last deployment date for the auth service? | `devops` | ✅ `devops` | 1 | 0.0% | [q04.md](q04.md) |
 | 5 | What is the current deal status for Acme Corp? | `crm` | ✅ `crm` | 2 | 0.0% | [q05.md](q05.md) |
-| 6 | Who is the account owner for TechStart Ltd? | `crm` | _not yet run_ | — | — | — |
-| 7 | What is the runbook for when the ingestion pipeline throws a schema mismatch error? | `docs` | _not yet run_ | — | — | — |
-| 8 | What does the architecture doc say about the ingestion pipeline? | `docs` | _not yet run_ | — | — | — |
-| 9 | Did last night's pipeline failure affect any CRM customer sync? | `crm`, `data-platform` | _not yet run_ | — | — | — |
+| 6 | Who is the account owner for TechStart Ltd? | `crm` | ✅ `crm` | 1 | 0.0% | [q06.md](q06.md) |
+| 7 | What is the runbook for when the ingestion pipeline throws a schema mismatch error? | `docs` | ✅ `docs` | 5 | 0.0% | [q07.md](q07.md) |
+| 8 | What does the architecture doc say about the ingestion pipeline? | `docs` | ✅ `docs` | 2 | 0.0% | [q08.md](q08.md) |
+| 9 | Did last night's pipeline failure affect any CRM customer sync? | `crm`, `data-platform` | ✅ `crm`, `data-platform` | 4 | 100.0% | [q09.md](q09.md) |
 | 10 | The ingestion job failed - is there a fix in the runbooks? | `data-platform`, `docs` | _not yet run_ | — | — | — |
 | 11 | What's the status of the latest deployment and are there any known issues? | `devops`, `docs` | _not yet run_ | — | — | — |
 | 12 | Give me a full status update - pipeline, deployments, and any open incidents | `crm`, `data-platform`, `devops`, `docs` | _not yet run_ | — | — | — |

@@ -381,3 +381,83 @@ class TestFinalizeSynthesis:
         answer, citations = finalize_synthesis("An answer.", ["invented"], [])
         assert citations == []
         assert answer == "An answer."
+
+
+class TestNamedRecordsAreCited:
+    """A record the answer NAMES is a record the answer used, whether or not the model
+    remembered to cite it. finalize() only ever DROPPED a contradicted citation; it had no
+    way to ADD one the answer plainly relied on, and CRM citations carry no '#id' so the
+    whole corroboration path skipped them."""
+
+    CRM = [
+        "CRM account ACC-1001 (Acme Corp)",
+        "CRM account ACC-1002 (TechStart Ltd)",
+        "CRM account ACC-1003 (Northwind Retail)",
+    ]
+
+    def test_the_specialist_cites_every_account_its_answer_names(self) -> None:
+        # The real failure: the CRM agent wrote about all three accounts and returned one
+        # citation, leaving two-thirds of its own answer uncited — and the coordinator
+        # cannot cite what the specialist never handed it.
+        answer = (
+            "Accounts ACC-1001 (Acme Corp), ACC-1002 (TechStart Ltd) and "
+            "ACC-1003 (Northwind Retail) are all stale."
+        )
+        _, citations = finalize(answer, ["CRM account ACC-1001 (Acme Corp)"], self.CRM)
+        assert citations == self.CRM
+
+    def test_an_account_the_answer_never_names_is_not_cited(self) -> None:
+        answer = "Only ACC-1001 (Acme Corp) is stale."
+        _, citations = finalize(answer, [], self.CRM)
+        assert citations == ["CRM account ACC-1001 (Acme Corp)"]
+
+    def test_naming_a_record_cannot_invent_a_source(self) -> None:
+        # _named_in only ever selects from `allowed`, so an id in the prose that belongs to
+        # no supplied source adds nothing.
+        _, citations = finalize("Account ACC-9999 is stale.", [], self.CRM)
+        assert citations == ["CRM account ACC-1001 (Acme Corp)"]  # positional fallback only
+
+    def test_a_contradicted_citation_is_still_dropped(self) -> None:
+        # Adding named records must not resurrect the mismatched-citation bug: an answer
+        # about job #4822 must never be served citing job #4830.
+        answer, citations = finalize(
+            "The failure was in job #4822 (ingestion_raw_events) run #99150.", [ALLOWED[1]], ALLOWED
+        )
+        assert citations == [ALLOWED[0]]
+
+
+class TestSynthesisInlineCitations:
+    SUPPLIED = [
+        "Databricks Job #4830 (crm_sync) run #99163",
+        "CRM account ACC-1001 (Acme Corp)",
+        "CRM account ACC-1002 (TechStart Ltd)",
+    ]
+
+    def test_a_citation_written_into_the_prose_is_lifted_out(self) -> None:
+        # With the [data-agent] tags gone the model simply moved the leak: it started
+        # writing the citation STRINGS into the sentence instead.
+        answer, citations = finalize_synthesis(
+            "The crm_sync job failed [Databricks Job #4830 (crm_sync) run #99163].",
+            [],
+            self.SUPPLIED,
+        )
+        assert "[Databricks" not in answer
+        assert answer == "The crm_sync job failed."
+        assert "Databricks Job #4830 (crm_sync) run #99163" in citations
+
+    def test_a_bracketed_paraphrase_of_a_source_is_lifted_out_too(self) -> None:
+        # "[Nightly crm_sync run 99163]" is not a supplied citation verbatim, but its ids
+        # belong to one — a bracketed aside naming a cited record is a reference, not prose.
+        answer, _ = finalize_synthesis(
+            "The nightly run failed on 2026-07-12 [Nightly crm_sync run 99163].",
+            [],
+            self.SUPPLIED,
+        )
+        assert "99163]" not in answer
+        assert answer == "The nightly run failed on 2026-07-12."
+
+    def test_a_bracketed_aside_that_is_not_a_reference_survives(self) -> None:
+        # The rule keys on the source's identifiers, so ordinary bracketed prose is safe.
+        text = "The job failed [see the runbook] before the sync."
+        answer, _ = finalize_synthesis(text, [], self.SUPPLIED)
+        assert answer == text

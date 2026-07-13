@@ -66,6 +66,49 @@ _AGENT_TAG = re.compile(r"\s*[\[(]\s*[a-z][a-z0-9-]*-agent\s*[\])]", re.IGNORECA
 _CITATION_KEY = re.compile(r"[a-z0-9][a-z0-9:._-]*[0-9][a-z0-9:._-]*", re.IGNORECASE)
 
 
+def _keys(text: str) -> set[str]:
+    return {k.lower() for k in _CITATION_KEY.findall(text)}
+
+
+def _named_in(answer: str, allowed: list[str]) -> list[str]:
+    """Sources whose record the answer names outright.
+
+    The CRM specialist wrote an answer about accounts ACC-1001, ACC-1002 and ACC-1003 and
+    returned one citation. `finalize` only ever DROPPED a citation the answer contradicted;
+    it had no way to ADD one the answer plainly used, so two of the three accounts went
+    uncited — and the coordinator could not cite what the specialist never handed it.
+
+    Naming ACC-1002 in the prose is as good as citing it: that record is where the claim
+    came from. This only ever adds sources from `allowed`, so it cannot invent one.
+    """
+    spoken = _keys(answer)
+    return [c for c in allowed if _keys(c) and (_keys(c) & spoken)]
+
+
+def _lift_inline(cleaned: str, allowed: list[str]) -> tuple[str, list[str]]:
+    """Pull citation strings the model wrote into the prose back out of it.
+
+    Substitutes a SPACE, never nothing: deleting outright welds the surrounding words
+    together ("...ran successfully.completed with...").
+    """
+    inline = [c for c in allowed if c in cleaned]
+    for citation in inline:
+        cleaned = re.sub(rf"\s*[\[(]?\s*{re.escape(citation)}\s*[\])]?", " ", cleaned)
+    return cleaned, inline
+
+
+def _tidy(text: str) -> str:
+    """Repair the punctuation left behind when a citation is lifted out of a sentence."""
+    text = re.sub(r"\(\s*\)|\[\s*\]", "", text)  # empty brackets
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+([.,;:])", r"\1", text)  # " ." -> "."
+    # A citation set off with commas is a parenthetical; removing it must take both commas.
+    text = re.sub(r",(?:\s*,)+", "", text)
+    text = re.sub(r"([;:])(?:\s*[;:])+", r"\1", text)
+    text = re.sub(r"[,;:]+\s*([.!?])", r"\1", text)
+    return text
+
+
 def finalize_synthesis(
     answer: str, model_citations: list[str], supplied: list[str]
 ) -> tuple[str, list[str]]:
@@ -85,23 +128,32 @@ def finalize_synthesis(
     kept regardless — it cannot be checked this way, and absence of evidence is not evidence
     of absence. The specialists were dispatched because the question needed them and their
     answers are the sole material here, so the bias is deliberately towards keeping.
+
+    Once the tags were gone the model simply moved the leak: it began writing the citation
+    STRINGS into the prose instead — "...refresh of the bronze.raw_events table by job #4822
+    [Databricks Job #4830 (crm_sync) run #99163]". Those are lifted out, exactly as they are
+    for a specialist's answer, and so are any bracketed leftovers that merely paraphrase a
+    source ("[Nightly crm_sync run 99163]") — a bracketed aside naming a cited record is a
+    reference, not prose.
     """
     cleaned = _AGENT_TAG.sub("", clean_answer(answer))
-    cleaned = re.sub(r"\(\s*\)|\[\s*\]", "", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
-    cleaned = re.sub(r",(?:\s*,)+", "", cleaned)
-    cleaned = re.sub(r"[,;:]+\s*([.!?])", r"\1", cleaned)
+    cleaned, inline = _lift_inline(cleaned, supplied)
 
-    spoken = {k.lower() for k in _CITATION_KEY.findall(cleaned)}
-    named = {c for c in model_citations if c in supplied}
+    # A bracketed aside whose identifiers belong to a source is a citation the model has
+    # paraphrased ("[Nightly crm_sync run 99163]"), not something it is telling the reader.
+    supplied_keys = {k for c in supplied for k in _keys(c)}
 
-    kept = []
-    for citation in supplied:
-        keys = {k.lower() for k in _CITATION_KEY.findall(citation)}
-        if citation in named or not keys or (keys & spoken):
-            kept.append(citation)
+    def _is_reference(match: re.Match[str]) -> str:
+        return " " if _keys(match.group(1)) & supplied_keys else match.group(0)
 
+    cleaned = re.sub(r"\s*\[([^\]]{3,120})\]", _is_reference, cleaned)
+    cleaned = _tidy(cleaned)
+
+    named = [c for c in model_citations if c in supplied]
+    spoken = _named_in(cleaned, supplied)
+    unidentifiable = [c for c in supplied if not _keys(c)]  # doc sections: cannot be checked
+
+    kept = [c for c in supplied if c in inline or c in named or c in spoken or c in unidentifiable]
     return cleaned, kept or supplied
 
 
@@ -184,30 +236,13 @@ def finalize(answer: str, model_citations: list[str], allowed: list[str]) -> tup
     """
     cleaned = clean_answer(answer)
 
-    # A citation the model wrote into the prose still tells us what it relied on.
-    inline = [c for c in allowed if c in cleaned]
-    for citation in inline:
-        # Substitute a SPACE, not nothing. Deleting the citation outright welded the
-        # surrounding words together: "...ran successfully. [Job #4821 run #99102]
-        # completed with..." collapsed to "...ran successfully.completed with...".
-        cleaned = re.sub(rf"\s*[\[(]?\s*{re.escape(citation)}\s*[\])]?", " ", cleaned)
-
-    # No ".word" -> ". word" repair here on purpose: it would corrupt file paths and
-    # error messages ("part-0007.parquet" -> "part-0007. parquet"), which are exactly the
-    # facts these answers are supposed to quote. Substituting a space above prevents the
-    # weld, so no repair is needed.
-    cleaned = re.sub(r"\(\s*\)|\[\s*\]", "", cleaned)  # empty brackets left behind
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)  # " ." -> "."
-    # The model likes to set a citation off with commas — "The deployment, [run #5512],
-    # completed successfully" — which makes it a parenthetical. Lifting it out must take
-    # BOTH commas with it. Collapsing the pair to one comma instead leaves the sentence
-    # limping: "The deployment, completed successfully." A doubled comma can only be our
-    # own doing (no real clause has an empty element between two commas), so this is safe.
-    cleaned = re.sub(r",(?:\s*,)+", "", cleaned)  # "x, , y" -> "x y"
-    cleaned = re.sub(r"([;:])(?:\s*[;:])+", r"\1", cleaned)  # ";;" -> ";"
-    cleaned = re.sub(r"[,;:]+\s*([.!?])", r"\1", cleaned)  # "x, ." -> "x."
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    # A citation the model wrote into the prose still tells us what it relied on. The lift
+    # substitutes a SPACE, never nothing: deleting outright welded the surrounding words
+    # together ("...ran successfully.completed with a SUCCESS state"). And no ".word" ->
+    # ". word" repair, ever: it would corrupt file paths and error messages
+    # ("part-0007.parquet" -> "part-0007. parquet"), the very facts the answer exists to quote.
+    cleaned, inline = _lift_inline(cleaned, allowed)
+    cleaned = _tidy(cleaned)
 
     # Only sources the answer's own identifiers do not contradict are eligible. Note this is
     # measured on the prose AFTER the inline citations are lifted out, so a citation cannot
@@ -217,7 +252,17 @@ def finalize(answer: str, model_citations: list[str], allowed: list[str]) -> tup
     # in an answer whose every fact came from job #4822. Lifting a citation out of the prose
     # tells us the model MEANT to cite it; it does not make the citation correct.
     supported = _supported_by(cleaned, allowed)
-    claimed = list(dict.fromkeys(inline + [c for c in model_citations if c in allowed]))
+
+    # A record the answer NAMES is a record the answer used, whether or not the model
+    # remembered to cite it. The CRM specialist wrote about accounts ACC-1001, ACC-1002 and
+    # ACC-1003 and returned one citation, leaving two-thirds of its own answer uncited —
+    # and the coordinator cannot cite what the specialist never handed it. Dropping a
+    # contradicted citation was only half the job.
+    claimed = list(
+        dict.fromkeys(
+            inline + [c for c in model_citations if c in allowed] + _named_in(cleaned, allowed)
+        )
+    )
     citations = [c for c in claimed if c in supported]
 
     if not citations and supported:

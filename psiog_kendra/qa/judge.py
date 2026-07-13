@@ -41,6 +41,12 @@ Your job, step by step:
    answer makes. NEVER list a citation string as a claim. "GitHub Actions run #5498
    (deploy-auth, commit 7de2b10)" is a label, not a fact to check.
 
+   Do NOT enumerate fields of the RAW SOURCE that the answer never mentions. If the answer
+   says nothing about the branch, the actor or the commit sha, then "The branch is main" and
+   "The actor is priya.n" are NOT claims — the answer never made them. You are grading the
+   answer, not summarising the source. Every claim you list must be traceable to words the
+   ANSWER actually wrote.
+
 2. For EACH claim, check it against the RAW SOURCE CONTENT.
    - GROUNDED  = the source states it (rewording is fine, it is still grounded).
    - UNGROUNDED = the source does not state it, or contradicts it.
@@ -48,6 +54,10 @@ Your job, step by step:
 3. Return EVERY claim, quoted, in exactly one of the two lists:
    - "grounded_claims"   : the claims the source supports
    - "ungrounded_claims" : the claims it does not
+
+   Each claim goes in EXACTLY ONE list, ONCE. Never put the same assertion in both lists,
+   and never list it twice. "Yes, the deployment passed all gates" and "The deployment
+   passed all gates" are the SAME claim - list it once.
 
 CRITICAL: you must list every claim you found. Returning two empty lists means you did no
 work, and an answer that asserts facts ALWAYS contains at least one claim. Never return
@@ -86,6 +96,130 @@ def strip_citation_echoes(claims: list[str], citations: list[str]) -> list[str]:
     """
     cited = {_normalise(c) for c in citations}
     return [c for c in claims if _normalise(c) and _normalise(c) not in cited]
+
+
+# Words that carry no subject matter, so overlapping on them means nothing.
+_STOPWORDS = frozenset(
+    ["the", "a", "an", "is", "was", "are", "were", "be", "been", "of", "in", "on", "at", "to", "for", "and", "or", "but", "it", "its", "this", "that", "these", "those", "with", "from", "by", "as", "all", "any", "not", "no", "yes", "has", "have", "had", "there", "their", "which", "who"]
+)
+
+# Tokens keep their internal dots, underscores and hyphens, so "priya.n", "sales_etl" and
+# "unit-tests" survive as single identifiers rather than being shredded into fragments.
+_TOKEN = re.compile(r"[a-z0-9][a-z0-9._:\-]*")
+
+
+def _content_words(text: str) -> list[str]:
+    return [
+        t for t in _TOKEN.findall(text.lower()) if len(t) >= 3 and t.strip("._:-") not in _STOPWORDS
+    ]
+
+
+def claims_the_answer_actually_makes(
+    claims: list[str], answer: str, *, min_overlap: float | None = None
+) -> list[str]:
+    """Drop 'claims' the judge read out of the source rather than out of the answer.
+
+    Asked whether the payments deployment passed its gates, the judge listed "The branch is
+    main", "The actor is priya.n", "The commit sha is a1f9c34" and "The workflow run id is
+    5512" as claims — none of which the answer mentions. It had stopped grading the answer
+    and started summarising the source.
+
+    That is not a harmless quirk. Every such claim is trivially grounded — the judge copied it
+    out of the very source it is checking against — so each one pads the denominator with a
+    free pass and drags the hallucination rate DOWN. A metric that flatters us is worse than
+    one that indicts us, because nobody goes looking for the bug.
+
+    The test is whether the claim is even ABOUT what the answer discusses: at least
+    `min_overlap` of its content words must appear in the answer. "The branch is main" shares
+    not one word with an answer about deployments and quality gates, and is dropped. "The
+    deployment completed successfully on 2026-07-11T15:32:00Z" shares every word, and is kept.
+
+    This cannot hide a real hallucination. A hallucination is by definition something the
+    ANSWER asserted, so it is built from the answer's own words and overlaps almost totally.
+    Only claims the answer never made score low enough to be dropped.
+    """
+    threshold = settings().judge_claim_overlap if min_overlap is None else min_overlap
+    spoken = set(_content_words(answer))
+    kept = []
+    for claim in claims:
+        words = _content_words(claim)
+        if not words:
+            continue
+        overlap = sum(1 for w in words if w in spoken) / len(words)
+        if overlap >= threshold:
+            kept.append(claim)
+    return kept
+
+
+def _claim_key(claim: str) -> str:
+    """Identity of an assertion. A leading "yes"/"no" answers the question, it is not part
+    of the claim, so "Yes, the deployment passed" and "The deployment passed" are one claim."""
+    return re.sub(r"^(?:yes|no|indeed|correct)\b[,\s]*", "", _normalise(claim)).strip()
+
+
+def resolve_contradictions(
+    grounded: list[str], ungrounded: list[str]
+) -> tuple[list[str], list[str], list[str]]:
+    """De-duplicate a verdict and pull out the claims graded BOTH ways.
+
+    On query 3 the judge returned "Yes, the latest deployment passed all quality gates" as
+    grounded and "The latest deployment of the payments service passed all quality gates" as
+    ungrounded — the same assertion, filed under both verdicts, in one breath. That single
+    contradiction was the entire reported hallucination rate for a wholly grounded answer.
+
+    A claim graded both ways has not been graded, and a self-contradicting verdict says
+    nothing about the answer — it says the judge slipped. Scoring it either way is a thumb on
+    the scale: call it ungrounded and a perfect answer reads 33%; call it grounded and we
+    have taught ourselves to discard inconvenient findings.
+
+    So they are returned separately, and the caller asks the judge to grade them again. Only
+    a claim the judge contradicts itself on TWICE is finally set aside as ungraded.
+
+    Returns (grounded, ungrounded, contradicted).
+    """
+    disputed = {_claim_key(c) for c in grounded} & {_claim_key(c) for c in ungrounded}
+
+    def dedupe(claims: list[str]) -> list[str]:
+        seen: set[str] = set()
+        out = []
+        for claim in claims:
+            k = _claim_key(claim)
+            if k in disputed or k in seen:
+                continue
+            seen.add(k)
+            out.append(claim)
+        return out
+
+    contradicted = [c for c in grounded if _claim_key(c) in disputed]
+    return dedupe(grounded), dedupe(ungrounded), contradicted
+
+
+def scrub(
+    verdict: JudgeVerdict, *, answer: str, citations: list[str]
+) -> tuple[JudgeVerdict, list[str]]:
+    """Clean a raw verdict before it is allowed to score anything.
+
+    gemma3:4b is a capable grader and a sloppy bookkeeper. Left alone it will echo the
+    citation label back as a claim, enumerate source fields the answer never mentioned, and
+    file the same assertion under both verdicts at once. Each of those quietly corrupts the
+    one number the RFP grades us on, so every verdict is scrubbed before it is counted.
+
+    If scrubbing empties the verdict, the judge enumerated nothing real — the caller retries,
+    and failing that reports UNVERIFIED. It must never read as a clean 0%.
+
+    Returns (clean verdict, claims the judge graded both ways).
+    """
+    grounded = strip_citation_echoes(verdict.grounded_claims, citations)
+    ungrounded = strip_citation_echoes(verdict.ungrounded_claims, citations)
+
+    grounded = claims_the_answer_actually_makes(grounded, answer)
+    ungrounded = claims_the_answer_actually_makes(ungrounded, answer)
+
+    grounded, ungrounded, contradicted = resolve_contradictions(grounded, ungrounded)
+    return (
+        JudgeVerdict(grounded_claims=grounded, ungrounded_claims=ungrounded),
+        contradicted,
+    )
 
 
 def load_raw_sources() -> dict[str, Any]:
@@ -154,31 +288,44 @@ class JudgeAgent:
             "ungrounded_claims."
         )
 
-        for attempt in range(2):
-            user = base
-            if attempt:
-                # The judge came back empty. That is not a clean answer — it is a judge
-                # that skipped the work. Push it once, explicitly.
-                user += (
-                    "\n\nYou returned no claims at all. The answer above plainly asserts "
-                    "facts. Re-read it, split it into individual claims, and list every one."
-                )
+        nudge = ""
+        for _ in range(2):
             try:
                 verdict = await self._llm.structured(
-                    system=SYSTEM, user=user, schema=JudgeVerdict, complexity=Complexity.COMPLEX
+                    system=SYSTEM,
+                    user=base + nudge,
+                    schema=JudgeVerdict,
+                    complexity=Complexity.COMPLEX,
                 )
             except LLMError:
                 break
 
-            # The judge parrots the citation string back as a claim. Scrub those before
-            # scoring; if that empties the verdict, it enumerated nothing real and the
-            # retry (or the UNVERIFIED verdict below) must still apply.
-            verdict = JudgeVerdict(
-                grounded_claims=strip_citation_echoes(verdict.grounded_claims, response.citations),
-                ungrounded_claims=strip_citation_echoes(
-                    verdict.ungrounded_claims, response.citations
-                ),
+            verdict, contradicted = scrub(
+                verdict, answer=response.answer, citations=response.citations
             )
+
+            if contradicted and not nudge:
+                # The judge filed the same claim as both grounded and ungrounded. That says
+                # nothing about the answer — it says the judge slipped. Make it grade those
+                # claims again rather than scoring a coin-flip.
+                disputed = "\n".join(f"- {c}" for c in contradicted)
+                nudge = (
+                    "\n\nYou listed these claims as BOTH grounded and ungrounded:\n"
+                    f"{disputed}\n"
+                    "A claim is grounded or it is not. Re-read the source, decide, and put "
+                    "each claim in exactly one list."
+                )
+                continue
+
+            if not verdict.is_measured and not nudge:
+                # The judge came back empty. That is not a clean answer — it is a judge
+                # that skipped the work. Push it once, explicitly.
+                nudge = (
+                    "\n\nYou returned no claims at all. The answer above plainly asserts "
+                    "facts. Re-read it, split it into individual claims, and list every one."
+                )
+                continue
+
             if verdict.is_measured:
                 return verdict
 

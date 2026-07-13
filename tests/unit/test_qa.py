@@ -28,8 +28,18 @@ from psiog_kendra.schemas import (
 )
 from tests.conftest import FakeLLM, routing
 
+# The judge now checks that a "claim" is even about what the answer discusses, so both the
+# answer and the claims in these fixtures have to be real sentences. Single letters used to
+# do; they no longer can, and that is the point of the check.
+ANSWER = "The sales_etl pipeline succeeded at 02:14 UTC and wrote 1284502 records."
+CLAIMS = [
+    "The sales_etl pipeline succeeded",
+    "It ran at 02:14 UTC",
+    "It wrote 1284502 records",
+]
 
-def response(answer: str = "a", citations: list[str] | None = None) -> CopilotResponse:
+
+def response(answer: str = ANSWER, citations: list[str] | None = None) -> CopilotResponse:
     # `is None`, not `or`: an explicitly empty citation list is the case under test.
     cited = ["Databricks Job #4821"] if citations is None else citations
     return CopilotResponse(answer=answer, citations=cited, domains_used=["data-platform"])
@@ -75,6 +85,18 @@ class TestStripCitationEchoes:
         assert strip_citation_echoes(claims, [AUTH_CITE]) == claims
 
 
+# The real answer the copilot gave for QA query 4, and the real verdict the judge returned.
+AUTH_ANSWER = (
+    "The last deployment date for the auth service was 2026-07-09T11:05:00Z. All quality "
+    "gates passed during this deployment, including unit tests, code coverage (83% against "
+    "an 80% threshold), and the security scan which found no high/critical CVEs."
+)
+
+
+def auth_response() -> CopilotResponse:
+    return CopilotResponse(answer=AUTH_ANSWER, citations=[AUTH_CITE], domains_used=["devops"])
+
+
 class TestJudgeAgent:
     async def test_a_citation_echoed_as_a_claim_is_not_a_hallucination(
         self, fake_llm: FakeLLM
@@ -86,12 +108,12 @@ class TestJudgeAgent:
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(
             grounded_claims=[
                 "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
-                "All quality gates passed",
+                "All quality gates passed during this deployment",
                 "Code coverage was 83% against an 80% threshold",
             ],
             ungrounded_claims=[AUTH_CITE],
         )
-        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
         assert verdict.ungrounded_claims == []
         assert verdict.total_claims == 3
         assert verdict.hallucination_rate == 0.0
@@ -102,10 +124,10 @@ class TestJudgeAgent:
         # The same echo landed in grounded_claims on query 3 — inflating the denominator and
         # quietly making the hallucination rate look better than it is. Both directions go.
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(
-            grounded_claims=["The deployment passed all quality gates", AUTH_CITE],
-            ungrounded_claims=["It ran 900 tests"],
+            grounded_claims=["All quality gates passed during this deployment", AUTH_CITE],
+            ungrounded_claims=["The deployment ran 900 unit tests"],
         )
-        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
         assert verdict.total_claims == 2
         assert verdict.hallucination_rate == 50.0
 
@@ -115,23 +137,93 @@ class TestJudgeAgent:
         # If scrubbing the echoes leaves nothing, the judge enumerated nothing real. That
         # must not certify the answer as 0% — it is UNVERIFIED, which counts against us.
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=[AUTH_CITE])
-        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
         assert verdict.hallucination_rate == 100.0
         assert "UNVERIFIED" in verdict.ungrounded_claims[0]
 
+    async def test_source_fields_the_answer_never_mentioned_are_not_claims(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # The real failure, from QA query 3. The judge stopped grading the answer and started
+        # summarising the source: it listed the branch, the actor, the commit sha and the run
+        # id — none of which the answer mentions. Each is trivially grounded (it copied them
+        # out of the source it is grading against), so each pads the denominator with a free
+        # pass and drags the hallucination rate DOWN. A metric that flatters us is the most
+        # dangerous kind, because nobody goes looking for the bug.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=[
+                "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
+                "The branch is main",
+                "The actor is priya.n",
+                "The commit sha is a1f9c34",
+                "The workflow run id is 5512",
+            ],
+        )
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+        assert verdict.grounded_claims == [
+            "The last deployment date for the auth service was 2026-07-09T11:05:00Z"
+        ]
+        assert verdict.total_claims == 1  # not 5
+
+    async def test_a_claim_graded_both_ways_is_sent_back_to_the_judge(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # The real failure, from QA query 3: "Yes, the latest deployment passed all quality
+        # gates" (grounded) and "The latest deployment ... passed all quality gates"
+        # (ungrounded) — the same assertion, filed under both verdicts at once. That single
+        # contradiction WAS the reported hallucination rate for a wholly grounded answer.
+        # A self-contradicting verdict says nothing about the answer; it says the judge
+        # slipped. So it grades again rather than us scoring a coin-flip.
+        contradictory = JudgeVerdict(
+            grounded_claims=["Yes, all quality gates passed during this deployment"],
+            ungrounded_claims=["All quality gates passed during this deployment"],
+        )
+        coherent = JudgeVerdict(grounded_claims=["All quality gates passed during this deployment"])
+        replies = iter([contradictory, coherent])
+        fake_llm.responses[JudgeVerdict] = lambda _: next(replies)
+
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+
+        assert len(fake_llm.calls) == 2
+        assert "BOTH grounded and ungrounded" in fake_llm.calls[1]["user"]
+        assert verdict.hallucination_rate == 0.0
+        assert verdict.ungrounded_claims == []
+
+    async def test_a_claim_contradicted_twice_is_set_aside_not_scored(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # If the judge contradicts itself twice on the same claim, it has not graded it.
+        # Scoring it either way would be a thumb on the scale, so it is set aside and the
+        # remaining claims are scored honestly.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=[
+                "Yes, all quality gates passed during this deployment",
+                "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
+            ],
+            ungrounded_claims=["All quality gates passed during this deployment"],
+        )
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+
+        assert len(fake_llm.calls) == 2  # it was given a second chance
+        assert verdict.grounded_claims == [
+            "The last deployment date for the auth service was 2026-07-09T11:05:00Z"
+        ]
+        assert verdict.ungrounded_claims == []
+        assert verdict.hallucination_rate == 0.0
+
     async def test_reports_a_clean_answer_as_grounded(self, fake_llm: FakeLLM) -> None:
-        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a", "b", "c"])
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=CLAIMS)
         verdict = await JudgeAgent(fake_llm).verify(response())
         assert verdict.hallucination_rate == 0.0
         assert verdict.is_measured is True
 
     async def test_detects_ungrounded_claims(self, fake_llm: FakeLLM) -> None:
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(
-            grounded_claims=["a", "b", "c"], ungrounded_claims=["Job ran at 09:00"]
+            grounded_claims=CLAIMS, ungrounded_claims=["The sales_etl pipeline ran at 09:00"]
         )
         verdict = await JudgeAgent(fake_llm).verify(response())
         assert verdict.hallucination_rate == 25.0
-        assert verdict.ungrounded_claims == ["Job ran at 09:00"]
+        assert verdict.ungrounded_claims == ["The sales_etl pipeline ran at 09:00"]
 
     async def test_an_uncited_answer_is_ungrounded_by_definition(self, fake_llm: FakeLLM) -> None:
         verdict = await JudgeAgent(fake_llm).verify(response(citations=[]))
@@ -147,7 +239,7 @@ class TestJudgeAgent:
     async def test_a_judge_that_enumerates_nothing_is_retried(self, fake_llm: FakeLLM) -> None:
         # The bug this guards: gemma3 returned zero claims for a substantive answer, which
         # scored as a perfect 0% hallucination without checking anything.
-        replies = iter([JudgeVerdict(), JudgeVerdict(grounded_claims=["a", "b"])])
+        replies = iter([JudgeVerdict(), JudgeVerdict(grounded_claims=CLAIMS[:2])])
         fake_llm.responses[JudgeVerdict] = lambda _: next(replies)
 
         verdict = await JudgeAgent(fake_llm).verify(response())

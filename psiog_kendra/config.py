@@ -131,6 +131,13 @@ class Settings:
     judge_source_char_limit: int = field(
         default_factory=lambda: _int("QA_JUDGE_SOURCE_CHAR_LIMIT", 5000)
     )
+    # How much of a "claim" must overlap the answer's own words before we accept that the
+    # answer really made it. The judge tends to enumerate source fields the answer never
+    # mentioned ("The actor is priya.n"), which pad the denominator with free passes and
+    # flatter the hallucination rate. Raise it to be stricter about what counts as a claim.
+    judge_claim_overlap: float = field(
+        default_factory=lambda: _float("QA_JUDGE_CLAIM_OVERLAP", 0.5)
+    )
 
     # ---------------- Paths ----------------
     docs_dir: Path = field(default_factory=lambda: _path("DOCS_DIR", "data/docs"))

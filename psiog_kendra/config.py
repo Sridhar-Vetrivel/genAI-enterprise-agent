@@ -138,6 +138,13 @@ class Settings:
     judge_claim_overlap: float = field(
         default_factory=lambda: _float("QA_JUDGE_CLAIM_OVERLAP", 0.5)
     )
+    # Hard stop per query. A cross-domain query is 5-7 sequential LLM calls and on local CPU
+    # inference it can run 15 minutes or more; a stalled one would otherwise hang the suite
+    # indefinitely. On timeout the query is RECORDED as timed out, never silently skipped —
+    # a missing result and a failed result must not look the same. 0 disables the limit.
+    query_timeout_seconds: float = field(
+        default_factory=lambda: _float("QA_QUERY_TIMEOUT_SECONDS", 900.0)
+    )
 
     # ---------------- Paths ----------------
     docs_dir: Path = field(default_factory=lambda: _path("DOCS_DIR", "data/docs"))

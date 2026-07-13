@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 import pytest
 
-from psiog_kendra.config import reset_settings
+from psiog_kendra.config import reset_settings, settings
 from psiog_kendra.llm import LLMError
 from psiog_kendra.qa.judge import JudgeAgent, load_raw_sources, strip_citation_echoes
 from psiog_kendra.qa.report import (
@@ -632,3 +633,78 @@ class TestVerdictIsNeverThrownAway:
         assert verdict.hallucination_rate == 100.0
         assert "UNVERIFIED" in verdict.ungrounded_claims[0]
         assert len(fake_llm.calls) == 2  # it was pushed once before giving up
+
+
+class TestQueryTimeout:
+    """A cross-domain query is 5-7 sequential LLM calls, and on local CPU inference it can
+    run past 15 minutes. Without a hard stop, one stalled query hangs the whole suite."""
+
+    async def test_a_stalled_query_is_recorded_as_timed_out_not_skipped(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_QUERY_TIMEOUT_SECONDS", "0.05")
+        reset_settings()
+
+        class Stalled:
+            async def ask(self, query: str):
+                await asyncio.sleep(10)  # never returns in time
+
+        result = await evaluate_query(by_id(9), Stalled(), None)
+
+        # Recorded, with the reason — a missing result and a failed one must not look alike.
+        assert result.id == 9
+        assert result.routed_correctly is False
+        assert result.error is not None
+        assert result.error.startswith("TIMED OUT")
+
+    async def test_the_timeout_message_names_the_cause_and_the_fix(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Whoever reads this report must not mistake a deployment constraint for a design
+        # flaw. The message has to say why it was slow and what makes it fast.
+        monkeypatch.setenv("QA_QUERY_TIMEOUT_SECONDS", "0.05")
+        reset_settings()
+
+        class Stalled:
+            async def ask(self, query: str):
+                await asyncio.sleep(10)
+
+        result = await evaluate_query(by_id(9), Stalled(), None)
+        assert "local CPU inference" in result.error
+        assert "OpenRouter is not provisioned" in result.error
+        assert "AI_MODEL_COMPLEX" in result.error
+
+    async def test_a_fast_query_is_unaffected_by_the_timeout(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_QUERY_TIMEOUT_SECONDS", "30")
+        monkeypatch.setenv("RAG_MIN_SCORE", "0.0")
+        reset_settings()
+        fake_llm.responses[RoutingDecision] = RoutingDecision(domains=["data-platform"])
+        fake_llm.responses[AgentResponse] = AgentResponse(
+            answer=ANSWER, citations=["Databricks Job #4821"]
+        )
+        from psiog_kendra.app import build_copilot
+
+        result = await evaluate_query(by_id(1), build_copilot(llm=fake_llm), None)
+        assert result.error is None
+        assert result.routed_correctly is True
+
+    async def test_zero_disables_the_limit(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_QUERY_TIMEOUT_SECONDS", "0")
+        reset_settings()
+        assert settings().query_timeout_seconds == 0.0
+
+        class Slow:
+            async def ask(self, query: str):
+                await asyncio.sleep(0.01)
+                return CopilotResponse(
+                    answer=ANSWER,
+                    citations=["Databricks Job #4821"],
+                    domains_used=["data-platform"],
+                )
+
+        result = await evaluate_query(by_id(1), Slow(), None)
+        assert result.error is None  # no timeout applied

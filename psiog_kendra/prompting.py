@@ -110,6 +110,17 @@ def _lift_inline(cleaned: str, allowed: list[str]) -> tuple[str, list[str]]:
     return cleaned, inline
 
 
+# A clause that exists only to introduce a citation — "..., as detailed in [runbook-12.md]".
+# Lift the citation out and the clause is left pointing at nothing: "...TechStart Ltd, as
+# detailed in." It has no meaning without its object, so it goes with it.
+_DANGLING_REFERENCE = re.compile(
+    r"[,;]?\s*\b(?:as\s+(?:detailed|described|outlined|noted|shown|documented|per)\s+in"
+    r"|as\s+(?:detailed|described|outlined|noted|shown|documented)"
+    r"|according\s+to|see|per|from|in|documented\s+in)\s*(?=[.!?]\s*$|$)",
+    re.IGNORECASE,
+)
+
+
 def _tidy(text: str) -> str:
     """Repair the punctuation left behind when a citation is lifted out of a sentence."""
     text = re.sub(r"\(\s*\)|\[\s*\]", "", text)  # empty brackets
@@ -119,7 +130,10 @@ def _tidy(text: str) -> str:
     text = re.sub(r",(?:\s*,)+", "", text)
     text = re.sub(r"([;:])(?:\s*[;:])+", r"\1", text)
     text = re.sub(r"[,;:]+\s*([.!?])", r"\1", text)
-    return text
+    text = _DANGLING_REFERENCE.sub("", text)  # "..., as detailed in." -> "..."
+    text = re.sub(r"\s+([.,;:])", r"\1", text)
+    text = re.sub(r"[,;:]+\s*([.!?])", r"\1", text)
+    return text.strip()
 
 
 def finalize_synthesis(

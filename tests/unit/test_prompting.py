@@ -593,3 +593,37 @@ class TestDocumentCitationsSurvive:
             "The failure was in job #4822 run #99150.", [supplied[1]], supplied
         )
         assert citations == [supplied[0]]
+
+
+class TestDanglingReference:
+    """A clause that exists only to introduce a citation is left pointing at nothing once the
+    citation is lifted out: "...stale records for Acme Corp and TechStart Ltd, as detailed in."
+    """
+
+    def test_a_dangling_reference_clause_is_removed(self) -> None:
+        answer, _ = finalize_synthesis(
+            "Stale records for Acme Corp and TechStart Ltd, as detailed in.", [], ALLOWED
+        )
+        assert answer == "Stale records for Acme Corp and TechStart Ltd."
+
+    @pytest.mark.parametrize(
+        "tail",
+        ["as detailed in.", "as described in.", "as documented in.", "according to.", "see."],
+    )
+    def test_every_dangling_form_is_removed(self, tail: str) -> None:
+        answer, _ = finalize_synthesis(f"The gate failed, {tail}", [], ALLOWED)
+        assert answer == "The gate failed."
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "The file was quarantined in the bucket.",
+            "The runbook says to re-run the job in the Databricks Jobs UI.",
+            "Coverage was 74%, as reported by the gate.",
+            "The error occurred in production.",
+        ],
+    )
+    def test_a_preposition_inside_a_real_sentence_is_untouched(self, text: str) -> None:
+        # The clause is only dangling when it has nothing after it.
+        answer, _ = finalize_synthesis(text, [], ALLOWED)
+        assert answer == text

@@ -306,6 +306,39 @@ def scrub(
     )
 
 
+# A hard fact: something the answer cannot arrive at by rephrasing. A date, a job or run id,
+# a record count, an account code. Percentages and 1-2 digit numbers are excluded — "83%",
+# "3 accounts" and "two gates" are the kind of thing prose legitimately restates or counts.
+_HARD_FACT = re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{3,}\b|\b[A-Z]{2,}-\d+\b")
+
+
+def unsupported_facts(answer: str, sources: dict[str, Any]) -> list[str]:
+    """Hard facts the answer states that appear nowhere in the sources it cited.
+
+    This is the deterministic half of the judge, and it exists because the LLM half missed a
+    hallucination. On query 11 the answer said "Job 4822 failed on 2026-07-13". The fixture
+    says 2026-07-12. gemma3:4b read that claim, checked it against the source, and marked it
+    GROUNDED — a fabricated date waved through by the very agent whose job is to catch it.
+
+    A judge that under-reports is the worst outcome this system has: the number looks good,
+    so nobody investigates. And an LLM at this size cannot be relied on to notice a one-digit
+    difference in a date.
+
+    So dates, ids, record counts and account codes are checked by string search instead. They
+    are the facts an answer cannot reach by paraphrase — either the source says 2026-07-12 or
+    it does not — which is exactly why they are checkable without a model, and exactly where
+    a small model is weakest.
+
+    Deliberately NOT checked: percentages, and numbers under three digits. "74%", "three
+    accounts", "both gates" are ordinary prose, and flagging them would drown a real finding
+    in noise.
+    """
+    haystack = json.dumps(sources)
+    stated = _HARD_FACT.findall(answer)
+    missing = [fact for fact in dict.fromkeys(stated) if fact not in haystack]
+    return missing
+
+
 def load_raw_sources() -> dict[str, Any]:
     """Everything the copilot could legitimately have cited.
 
@@ -322,16 +355,21 @@ def load_raw_sources() -> dict[str, Any]:
 
 
 def _relevant_sources(citations: list[str], raw: dict[str, Any]) -> dict[str, Any]:
-    """Narrow the raw corpus to the systems the answer actually cited."""
+    """Narrow the raw corpus to the systems the answer actually cited.
+
+    Every lookup is a `.get`: a caller may legitimately supply a partial corpus (a test with
+    only Databricks records, a deployment where a source is unreachable), and a judge that
+    raises KeyError there would take down the whole QA run over a missing key.
+    """
     cited = " ".join(citations).lower()
     picked: dict[str, Any] = {}
-    if "databricks" in cited:
+    if "databricks" in cited and "databricks" in raw:
         picked["databricks"] = raw["databricks"]
-    if "github" in cited or "actions" in cited:
+    if ("github" in cited or "actions" in cited) and "devops" in raw:
         picked["devops"] = raw["devops"]
-    if "crm" in cited:
+    if "crm" in cited and "crm" in raw:
         picked["crm"] = raw["crm"]
-    docs = [d for d in raw["documentation"] if d["citation"] in citations]
+    docs = [d for d in raw.get("documentation", []) if d["citation"] in citations]
     if docs:
         picked["documentation"] = docs
     # An answer citing nothing we recognise still has to be judged - against everything.
@@ -392,6 +430,7 @@ class JudgeAgent:
                 break
 
             verdict, contradicted = scrub(raw, answer=response.answer, citations=response.citations)
+            verdict = self._enforce_hard_facts(verdict, response, sources)
 
             if verdict.is_measured:
                 best = verdict
@@ -430,9 +469,43 @@ class JudgeAgent:
 
         # Judge failed or refused to enumerate. Report the answer as UNVERIFIED rather than
         # certify it clean — a silent 0% would be the worst possible QA outcome.
+        return self._enforce_hard_facts(
+            JudgeVerdict(
+                ungrounded_claims=[
+                    "Judge agent could not verify this answer (it enumerated no claims); "
+                    "grounding is UNVERIFIED, not confirmed."
+                ]
+            ),
+            response,
+            sources,
+        )
+
+    def _enforce_hard_facts(
+        self, verdict: JudgeVerdict, response: CopilotResponse, sources: dict[str, Any]
+    ) -> JudgeVerdict:
+        """Add any fabricated date, id or record count the LLM judge failed to notice.
+
+        This runs on EVERY verdict, including a clean one, because the failure it guards is
+        the judge saying an answer is fine when it is not. On query 11 the answer stated "Job
+        4822 failed on 2026-07-13"; the source says 2026-07-12; gemma3:4b marked it grounded.
+        A judge that under-reports is the worst outcome this system has — the number looks
+        good, so nobody investigates.
+
+        It can only ever ADD an ungrounded claim, never remove one. It cannot make an answer
+        look cleaner than the LLM judge found it.
+        """
+        missing = unsupported_facts(response.answer, sources)
+        if not missing:
+            return verdict
+
+        found = ", ".join(missing)
         return JudgeVerdict(
+            grounded_claims=[
+                c for c in verdict.grounded_claims if not any(m in c for m in missing)
+            ],
             ungrounded_claims=[
-                "Judge agent could not verify this answer (it enumerated no claims); "
-                "grounding is UNVERIFIED, not confirmed."
-            ]
+                *verdict.ungrounded_claims,
+                f"The answer states {found}, which appears nowhere in the sources it cited "
+                f"(deterministic check, not the LLM judge).",
+            ],
         )

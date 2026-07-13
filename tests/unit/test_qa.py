@@ -15,6 +15,7 @@ from psiog_kendra.qa.judge import (
     claims_the_answer_actually_makes,
     load_raw_sources,
     strip_citation_echoes,
+    unsupported_facts,
 )
 from psiog_kendra.qa.report import (
     QAReport,
@@ -439,13 +440,20 @@ class TestRunQA:
             # Route by the ground truth so the harness itself can be tested.
             domains=sorted(next(q.expected_domains for q in TEST_QUERIES if q.query in user))
         )
+        # A fact-free answer on purpose: this test drives every domain with one canned
+        # reply, so an answer carrying a Databricks record count would be cited to the docs
+        # corpus and the deterministic fact check would (correctly) flag it. The harness is
+        # what is under test here, not grounding.
+        harness_answer = "The pipeline completed and the records were refreshed."
         fake_llm.responses[AgentResponse] = AgentResponse(
-            answer=ANSWER, citations=["Databricks Job #4821"]
+            answer=harness_answer, citations=["Databricks Job #4821"]
         )
         fake_llm.responses[SynthesisResult] = SynthesisResult(
-            answer=ANSWER, citations=["Databricks Job #4821"]
+            answer=harness_answer, citations=["Databricks Job #4821"]
         )
-        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=CLAIMS)
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["The pipeline completed", "The records were refreshed"]
+        )
 
         report = await run_qa(llm=fake_llm)
         assert len(report.results) == 12
@@ -789,3 +797,83 @@ class TestPhantomClaims:
         claims = ["The source file is `s3://psiog-raw/events/2026-07-12/part-0007.parquet`"]
         answer = "It failed on `s3://psiog-raw/events/2026-07-12/part-0007.parquet`."
         assert claims_the_answer_actually_makes(claims, answer) == claims
+
+
+class TestDeterministicFactCheck:
+    """The deterministic half of the judge. It exists because the LLM half missed a
+    hallucination: on QA query 11 the answer said "Job 4822 failed on 2026-07-13", the source
+    says 2026-07-12, and gemma3:4b marked it GROUNDED. A judge that under-reports is the
+    worst outcome this system has — the number looks good, so nobody investigates."""
+
+    SOURCES = {
+        "databricks": {
+            "runs": [
+                {
+                    "job_id": 4822,
+                    "run_id": 99150,
+                    "job_name": "ingestion_raw_events",
+                    "start_time": "2026-07-12T00:04:00Z",
+                    "result_state": "FAILED",
+                }
+            ]
+        }
+    }
+
+    def test_a_fabricated_date_is_caught(self) -> None:
+        answer = "Job 4822 (ingestion_raw_events) failed on 2026-07-13."
+        assert unsupported_facts(answer, self.SOURCES) == ["2026-07-13"]
+
+    def test_a_correct_date_is_not_flagged(self) -> None:
+        answer = "Job 4822 failed on 2026-07-12 (run 99150)."
+        assert unsupported_facts(answer, self.SOURCES) == []
+
+    def test_a_fabricated_run_id_is_caught(self) -> None:
+        answer = "Run 99999 failed."
+        assert unsupported_facts(answer, self.SOURCES) == ["99999"]
+
+    def test_percentages_and_small_numbers_are_not_hard_facts(self) -> None:
+        # "74%", "three accounts", "both gates" are ordinary prose. Flagging them would drown
+        # a real finding in noise.
+        answer = "Coverage was 74% against an 80% threshold, and 2 accounts went stale."
+        assert unsupported_facts(answer, self.SOURCES) == []
+
+    async def test_the_llm_judge_cannot_wave_a_fabricated_date_through(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # The real failure. The judge said every claim was grounded, including the bad date.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=[
+                "Job 4822 (ingestion_raw_events) failed on 2026-07-13",
+                "The failure triggered a SchemaMismatchException",
+            ],
+        )
+        response = CopilotResponse(
+            answer=(
+                "Job 4822 (`ingestion_raw_events`) failed on 2026-07-13, triggering a "
+                "SchemaMismatchException."
+            ),
+            citations=["Databricks Job #4822 (ingestion_raw_events) run #99150"],
+            domains_used=["data-platform"],
+        )
+        judge = JudgeAgent(fake_llm, raw_sources={"databricks": self.SOURCES["databricks"]})
+        verdict = await judge.verify(response)
+
+        assert verdict.hallucination_rate > 0.0
+        assert any("2026-07-13" in c for c in verdict.ungrounded_claims)
+        # The claim carrying the bad date must not still be counted as grounded.
+        assert not any("2026-07-13" in c for c in verdict.grounded_claims)
+
+    async def test_it_can_only_add_findings_never_remove_them(self, fake_llm: FakeLLM) -> None:
+        # It must never be able to make an answer look cleaner than the LLM judge found it.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["Job 4822 failed"],
+            ungrounded_claims=["The job succeeded"],
+        )
+        response = CopilotResponse(
+            answer="Job 4822 failed. The job succeeded.",
+            citations=["Databricks Job #4822 (ingestion_raw_events) run #99150"],
+            domains_used=["data-platform"],
+        )
+        judge = JudgeAgent(fake_llm, raw_sources={"databricks": self.SOURCES["databricks"]})
+        verdict = await judge.verify(response)
+        assert "The job succeeded" in verdict.ungrounded_claims

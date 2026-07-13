@@ -16,6 +16,7 @@ a fabricated citation.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from psiog_kendra.config import settings
@@ -30,10 +31,15 @@ You are given an ANSWER and the RAW SOURCE CONTENT it cited.
 
 Your job, step by step:
 
-1. Split the ANSWER into individual factual claims. A claim is ONE checkable assertion:
+1. Split the ANSWER PROSE into individual factual claims. A claim is ONE checkable assertion:
    a status, a name, a number, a date, an ID, an error message, or a procedural step.
    Almost every sentence contains at least one claim. A sentence with several facts
    contains several claims - split it.
+
+   Take claims from the ANSWER ONLY. The CITATIONS CLAIMED block is NOT part of the answer:
+   those strings are provenance labels naming where the answer came from, not assertions the
+   answer makes. NEVER list a citation string as a claim. "GitHub Actions run #5498
+   (deploy-auth, commit 7de2b10)" is a label, not a fact to check.
 
 2. For EACH claim, check it against the RAW SOURCE CONTENT.
    - GROUNDED  = the source states it (rewording is fine, it is still grounded).
@@ -54,6 +60,32 @@ Example shape (illustrative only):
   grounded_claims:   ["The sales_etl job succeeded", "It ran at 02:14 UTC"]
   ungrounded_claims: ["It processed 5 million rows"]
 """
+
+
+def _normalise(text: str) -> str:
+    """Reduce a string to comparable words, so punctuation and '#' cannot hide a match."""
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def strip_citation_echoes(claims: list[str], citations: list[str]) -> list[str]:
+    """Drop 'claims' that are just the citation string parroted back.
+
+    The judge kept enumerating the provenance label as though it were an assertion — it
+    listed "GitHub Actions run #5498 (deploy-auth, commit 7de2b10)" as a claim and then
+    marked it UNGROUNDED, in an answer whose every actual fact it had already confirmed.
+    That is a phantom hallucination: it inflates the denominator, and lands in the numerator
+    at random (the same echo scored GROUNDED on the previous query).
+
+    A citation is where the answer came from, not something the answer asserts, so it is not
+    a claim and must not be scored as one.
+
+    The match is exact-after-normalisation, deliberately. A looser rule (substring) would eat
+    real claims that happen to name their record — "The job failed on Databricks Job #4822
+    (ingestion_raw_events) run #99150" is a genuine, checkable assertion. Under-filtering
+    only keeps an extra real claim; over-filtering would hide a hallucination.
+    """
+    cited = {_normalise(c) for c in citations}
+    return [c for c in claims if _normalise(c) and _normalise(c) not in cited]
 
 
 def load_raw_sources() -> dict[str, Any]:
@@ -137,6 +169,16 @@ class JudgeAgent:
                 )
             except LLMError:
                 break
+
+            # The judge parrots the citation string back as a claim. Scrub those before
+            # scoring; if that empties the verdict, it enumerated nothing real and the
+            # retry (or the UNVERIFIED verdict below) must still apply.
+            verdict = JudgeVerdict(
+                grounded_claims=strip_citation_echoes(verdict.grounded_claims, response.citations),
+                ungrounded_claims=strip_citation_echoes(
+                    verdict.ungrounded_claims, response.citations
+                ),
+            )
             if verdict.is_measured:
                 return verdict
 

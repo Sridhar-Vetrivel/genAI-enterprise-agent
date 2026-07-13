@@ -178,9 +178,8 @@ hand-edit it.
 
 ## Commit attribution
 
-```
-Co-Authored-By: Claude <noreply@anthropic.com>
-```
+**Do not add a `Co-Authored-By` trailer.** Commits are authored under the repository owner's
+name only. Write the message body to explain *why* the change was made.
 
 ## Things to avoid
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from psiog_kendra.llm import LLMError
-from psiog_kendra.qa.judge import JudgeAgent, load_raw_sources
+from psiog_kendra.qa.judge import JudgeAgent, load_raw_sources, strip_citation_echoes
 from psiog_kendra.qa.report import QAReport, QueryResult, evaluate_query, render, run_qa
 from psiog_kendra.qa.test_queries import TEST_QUERIES, by_id
 from psiog_kendra.schemas import CopilotResponse, JudgeVerdict, RoutingDecision, SynthesisResult
@@ -25,7 +25,83 @@ class TestLoadRawSources:
         assert raw["documentation"]
 
 
+AUTH_CITE = "GitHub Actions run #5498 (deploy-auth, commit 7de2b10)"
+
+
+class TestStripCitationEchoes:
+    def test_drops_a_citation_parroted_back_as_a_claim(self) -> None:
+        claims = ["The last deployment was 2026-07-09T11:05:00Z", AUTH_CITE]
+        assert strip_citation_echoes(claims, [AUTH_CITE]) == [
+            "The last deployment was 2026-07-09T11:05:00Z"
+        ]
+
+    def test_punctuation_and_hashes_cannot_hide_the_echo(self) -> None:
+        assert (
+            strip_citation_echoes(
+                ["GitHub Actions run 5498 deploy-auth commit 7de2b10"], [AUTH_CITE]
+            )
+            == []
+        )
+
+    def test_a_real_claim_naming_its_record_is_kept(self) -> None:
+        # The match is exact-after-normalisation on purpose. A substring rule would eat this
+        # — a genuine, checkable assertion that happens to name the record it came from.
+        claim = "The job failed on Databricks Job #4822 (ingestion_raw_events) run #99150"
+        cites = ["Databricks Job #4822 (ingestion_raw_events) run #99150"]
+        assert strip_citation_echoes([claim], cites) == [claim]
+
+    def test_blank_claims_are_dropped(self) -> None:
+        assert strip_citation_echoes(["", "   "], [AUTH_CITE]) == []
+
+    def test_nothing_to_strip_leaves_the_claims_alone(self) -> None:
+        claims = ["The pipeline succeeded", "It wrote 1284502 rows"]
+        assert strip_citation_echoes(claims, [AUTH_CITE]) == claims
+
+
 class TestJudgeAgent:
+    async def test_a_citation_echoed_as_a_claim_is_not_a_hallucination(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # The real failure, from QA query 4. Every actual fact in the answer was confirmed
+        # grounded; the judge then listed the CITATION STRING as a sixth claim and marked it
+        # ungrounded — scoring a perfectly grounded answer at 16.67%. A citation says where
+        # the answer came from; it is not something the answer asserts.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=[
+                "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
+                "All quality gates passed",
+                "Code coverage was 83% against an 80% threshold",
+            ],
+            ungrounded_claims=[AUTH_CITE],
+        )
+        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        assert verdict.ungrounded_claims == []
+        assert verdict.total_claims == 3
+        assert verdict.hallucination_rate == 0.0
+
+    async def test_an_echo_scored_grounded_does_not_pad_the_denominator(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # The same echo landed in grounded_claims on query 3 — inflating the denominator and
+        # quietly making the hallucination rate look better than it is. Both directions go.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["The deployment passed all quality gates", AUTH_CITE],
+            ungrounded_claims=["It ran 900 tests"],
+        )
+        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        assert verdict.total_claims == 2
+        assert verdict.hallucination_rate == 50.0
+
+    async def test_an_answer_that_is_only_a_citation_echo_is_unverified_not_clean(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # If scrubbing the echoes leaves nothing, the judge enumerated nothing real. That
+        # must not certify the answer as 0% — it is UNVERIFIED, which counts against us.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=[AUTH_CITE])
+        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        assert verdict.hallucination_rate == 100.0
+        assert "UNVERIFIED" in verdict.ungrounded_claims[0]
+
     async def test_reports_a_clean_answer_as_grounded(self, fake_llm: FakeLLM) -> None:
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a", "b", "c"])
         verdict = await JudgeAgent(fake_llm).verify(response())

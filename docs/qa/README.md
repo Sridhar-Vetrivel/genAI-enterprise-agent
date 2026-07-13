@@ -7,13 +7,13 @@ Auto-generated from the last `make qa` run. One page per test query: what was as
 | Metric | Target | Measured |
 |---|---|---|
 | Routing accuracy | 100.0% | **100.0%** |
-| Hallucination rate | &lt;10.0% | **0.0%** |
-| Answers carrying citations | all | **3 / 3** |
-| Claims grounded | — | **19 / 19** |
-| Answers verified by the Judge | all | **3 / 3** |
+| Hallucination rate | &lt;10.0% | **4.0%** |
+| Answers carrying citations | all | **4 / 4** |
+| Claims grounded | — | **24 / 25** |
+| Answers verified by the Judge | all | **4 / 4** |
 | LLM cost | ₹0 | **₹0** (local `gemma3:4b` / `gemma3:1b`) |
 
-Queries completed in this run: **3 / 12**
+Queries completed in this run: **4 / 12**
 
 ## Per-query evidence
 
@@ -22,7 +22,7 @@ Queries completed in this run: **3 / 12**
 | 1 | Did yesterday's ETL pipeline for the sales data run successfully? | `data-platform` | ✅ `data-platform` | 2 | 0.0% | [q01.md](q01.md) |
 | 2 | What was the error in the last failed Databricks job? | `data-platform` | ✅ `data-platform` | 1 | 0.0% | [q02.md](q02.md) |
 | 3 | Did the latest deployment of the payments service pass all quality gates? | `devops` | ✅ `devops` | 1 | 0.0% | [q03.md](q03.md) |
-| 4 | What was the last deployment date for the auth service? | `devops` | _not yet run_ | — | — | — |
+| 4 | What was the last deployment date for the auth service? | `devops` | ✅ `devops` | 1 | 16.67% | [q04.md](q04.md) |
 | 5 | What is the current deal status for Acme Corp? | `crm` | _not yet run_ | — | — | — |
 | 6 | Who is the account owner for TechStart Ltd? | `crm` | _not yet run_ | — | — | — |
 | 7 | What is the runbook for when the ingestion pipeline throws a schema mismatch error? | `docs` | _not yet run_ | — | — | — |

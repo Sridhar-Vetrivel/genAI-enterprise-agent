@@ -494,3 +494,52 @@ class TestUnterminatedPlaceholder:
         # "sources" as an ordinary word, unbracketed, must never be touched.
         text = "The runbook lists three sources for the failure."
         assert clean_answer(text) == text
+
+
+class TestJsonWreckage:
+    """gemma3 ran off the end of a cross-domain answer into the structure of its own JSON
+    reply. The corrupt tail also defeated the grounding judge, so a correct four-source
+    answer came back UNVERIFIED (100%)."""
+
+    def test_the_answer_is_cut_at_the_json_wreckage(self) -> None:
+        # The real output, from QA query 9.
+        leaked = (
+            "The nightly `crm_sync` run 99163 failed on 2026-07-12; record last refreshed "
+            "2026-07-11.}]K. 1003 (Northwind Retail)."
+        )
+        cleaned = clean_answer(leaked)
+        assert "}" not in cleaned and "]K" not in cleaned
+        assert cleaned == (
+            "The nightly `crm_sync` run 99163 failed on 2026-07-12; record last refreshed "
+            "2026-07-11."
+        )
+
+    def test_no_fixture_string_contains_a_brace(self) -> None:
+        # This is the test that actually licenses the rule above. Cutting an answer at the
+        # first brace is only safe because no source can legitimately put one there — if a
+        # fixture ever quotes a brace in an error message or a note, this fails and the rule
+        # must be narrowed rather than the fixture changed.
+        import glob
+        import json as _json
+
+        offenders: list[str] = []
+
+        def walk(node: object, path: str = "") -> None:
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    walk(v, f"{path}/{k}")
+            elif isinstance(node, list):
+                for i, v in enumerate(node):
+                    walk(v, f"{path}[{i}]")
+            elif isinstance(node, str) and ("{" in node or "}" in node):
+                offenders.append(f"{path}: {node}")
+
+        for path in glob.glob("data/mock/*.json"):
+            with open(path) as fh:
+                walk(_json.load(fh))
+
+        assert offenders == [], f"a fixture quotes a brace, so the cut rule is unsafe: {offenders}"
+
+    def test_prose_without_braces_is_untouched(self) -> None:
+        text = "The job failed on s3://psiog-raw/events/part-0007.parquet at 02:14 UTC."
+        assert clean_answer(text) == text

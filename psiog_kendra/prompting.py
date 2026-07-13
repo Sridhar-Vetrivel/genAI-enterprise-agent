@@ -293,6 +293,21 @@ def clean_answer(text: str) -> str:
         found = text.lower().find(marker.lower())
         if found != -1:
             cut = min(cut, found)
+
+    # A brace is never prose. gemma3 ran off the end of a cross-domain answer straight into
+    # the structure of its own JSON reply:
+    #   "...record last refreshed 2026-07-11.}]K. 1003 (Northwind Retail)."
+    # Everything from there on is wreckage — and the grounding judge could not split claims
+    # out of it, so a correct four-source answer came back UNVERIFIED (100%).
+    #
+    # Cutting at the first brace is safe HERE, and only because it was checked: not one
+    # string value in any fixture — no error message, no file path, no CRM note — contains a
+    # brace. If a source ever legitimately quotes one, this truncates a real answer, so the
+    # test that pins it asserts on the fixtures, not on the rule.
+    brace = min((text.find(c) for c in "{}" if c in text), default=-1)
+    if brace != -1:
+        cut = min(cut, brace)
+
     cleaned = text[:cut]
 
     # Drop trailing bullet lines that are just recited citations.

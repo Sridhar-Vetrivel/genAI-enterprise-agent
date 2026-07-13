@@ -2,13 +2,30 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
+from psiog_kendra.config import reset_settings
 from psiog_kendra.llm import LLMError
 from psiog_kendra.qa.judge import JudgeAgent, load_raw_sources, strip_citation_echoes
-from psiog_kendra.qa.report import QAReport, QueryResult, evaluate_query, render, run_qa
+from psiog_kendra.qa.report import (
+    QAReport,
+    QueryResult,
+    evaluate_query,
+    load_previous_results,
+    render,
+    run_qa,
+)
 from psiog_kendra.qa.test_queries import TEST_QUERIES, by_id
-from psiog_kendra.schemas import CopilotResponse, JudgeVerdict, RoutingDecision, SynthesisResult
+from psiog_kendra.schemas import (
+    AgentResponse,
+    CopilotResponse,
+    JudgeVerdict,
+    RoutingDecision,
+    SynthesisResult,
+)
 from tests.conftest import FakeLLM, routing
 
 
@@ -335,3 +352,95 @@ class TestRunQA:
         assert len(report.results) == 12
         assert report.routing_accuracy == 100.0
         assert report.hallucination_rate == 0.0
+
+
+class TestResume:
+    """Resume exists so a fix touching one query does not cost an hour of CPU re-running
+    the other eleven. It is opt-in: see the warning in run_qa's docstring."""
+
+    def _seed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ids: list[int]) -> None:
+        rows = [
+            QueryResult(
+                id=i,
+                query=by_id(i).query,
+                expected_domains=list(by_id(i).expected_domains),
+                actual_domains=list(by_id(i).expected_domains),
+                routed_correctly=True,
+                answer="from the previous run",
+                citations=["Databricks Job #4821"],
+                grounded_claim_texts=["a"],
+                judged=True,
+            )
+            for i in ids
+        ]
+        path = tmp_path / "qa_report.json"
+        path.write_text(json.dumps(QAReport(rows).to_dict()))
+        monkeypatch.setenv("QA_REPORT_PATH", str(path))
+        reset_settings()
+
+    def test_completed_queries_are_read_back_off_disk(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._seed(tmp_path, monkeypatch, [1, 2])
+        previous = load_previous_results()
+        assert set(previous) == {1, 2}
+        assert previous[1].answer == "from the previous run"
+
+    async def test_resume_skips_completed_queries_and_runs_the_rest(
+        self, fake_llm: FakeLLM, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._seed(tmp_path, monkeypatch, [1, 2])
+        monkeypatch.setenv("RAG_MIN_SCORE", "0.0")
+        reset_settings()
+        fake_llm.responses[RoutingDecision] = lambda user: RoutingDecision(
+            domains=sorted(next(q.expected_domains for q in TEST_QUERIES if q.query in user))
+        )
+        fake_llm.responses[AgentResponse] = AgentResponse(
+            answer="fresh", citations=["Databricks Job #4821"]
+        )
+        fake_llm.responses[SynthesisResult] = SynthesisResult(
+            answer="fresh", citations=["Databricks Job #4821"]
+        )
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a"])
+
+        report = await run_qa(llm=fake_llm, queries=TEST_QUERIES[:4], resume=True)
+
+        assert [r.id for r in report.results] == [1, 2, 3, 4]
+        # Q1 and Q2 came off disk untouched; Q3 and Q4 were actually run.
+        assert report.results[0].answer == "from the previous run"
+        assert report.results[2].answer == "fresh"
+
+    async def test_without_resume_every_query_is_run_again(
+        self, fake_llm: FakeLLM, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The default must stay a clean run. A report whose rows were graded by different
+        # code averages two different systems into one hallucination rate.
+        self._seed(tmp_path, monkeypatch, [1, 2])
+        monkeypatch.setenv("RAG_MIN_SCORE", "0.0")
+        reset_settings()
+        fake_llm.responses[RoutingDecision] = lambda user: RoutingDecision(
+            domains=sorted(next(q.expected_domains for q in TEST_QUERIES if q.query in user))
+        )
+        fake_llm.responses[AgentResponse] = AgentResponse(
+            answer="fresh", citations=["Databricks Job #4821"]
+        )
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a"])
+
+        report = await run_qa(llm=fake_llm, queries=TEST_QUERIES[:2])
+        assert all(r.answer != "from the previous run" for r in report.results)
+
+    def test_a_corrupt_report_resumes_from_nothing_rather_than_crashing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "qa_report.json"
+        path.write_text("{ this is not json")
+        monkeypatch.setenv("QA_REPORT_PATH", str(path))
+        reset_settings()
+        assert load_previous_results() == {}
+
+    def test_no_report_yet_resumes_from_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_REPORT_PATH", str(tmp_path / "absent.json"))
+        reset_settings()
+        assert load_previous_results() == {}

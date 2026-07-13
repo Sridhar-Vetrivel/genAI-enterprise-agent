@@ -9,6 +9,7 @@ Produces exactly the two numbers the RFP grades:
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 from dataclasses import asdict, dataclass, field
@@ -148,21 +149,56 @@ async def evaluate_query(
     return result
 
 
+def load_previous_results() -> dict[int, QueryResult]:
+    """The results already on disk from an earlier run, keyed by query id."""
+    path = settings().qa_report_path
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return {}
+    previous: dict[int, QueryResult] = {}
+    for row in raw.get("results", []):
+        fields = {k: v for k, v in row.items() if k in QueryResult.__dataclass_fields__}
+        previous[fields["id"]] = QueryResult(**fields)
+    return previous
+
+
 async def run_qa(
     llm: LLMGateway | None = None,
     *,
     with_judge: bool = True,
     queries: tuple[TestQuery, ...] = TEST_QUERIES,
     progress: bool = False,
+    resume: bool = False,
 ) -> QAReport:
-    """Run the full suite. Queries run sequentially: one local Ollama, one GPU."""
+    """Run the suite. Queries run sequentially: one local Ollama, one CPU.
+
+    `resume` keeps the results already in the report and only runs the queries missing
+    from it. A full run is ~60 CPU-bound LLM calls, so re-running all twelve to pick up a
+    fix that touched one of them is an hour wasted.
+
+    The caveat is the reason resume is opt-in rather than the default: every row in the
+    report feeds one hallucination rate. If a change alters how answers are produced or
+    how they are scored, resuming leaves rows in that file that were graded by code which
+    no longer exists, and the headline number silently averages two different systems.
+    Resume when a change cannot affect the completed queries; re-run when it can.
+    """
     llm = llm or OllamaGateway()
     copilot = build_copilot(llm=llm)
     judge = JudgeAgent(llm) if with_judge else None
 
-    results = []
-    results = []
+    previous = load_previous_results() if resume else {}
+    results: list[QueryResult] = []
+
     for tq in queries:
+        if tq.id in previous:
+            results.append(previous[tq.id])
+            if progress:
+                print(f"[{tq.id:>2}/{len(queries)}] SKIP (already in report)", flush=True)
+            continue
+
         result = await evaluate_query(tq, copilot, judge)
         results.append(result)
         if progress:
@@ -177,8 +213,9 @@ async def run_qa(
                 f"halluc={result.hallucination_rate}%",
                 flush=True,
             )
-            _checkpoint(QAReport(results=results))
-    return QAReport(results=results)
+            _checkpoint(QAReport(results=sorted(results, key=lambda r: r.id)))
+
+    return QAReport(results=sorted(results, key=lambda r: r.id))
 
 
 def _checkpoint(report: QAReport) -> None:
@@ -225,7 +262,35 @@ def render(report: QAReport) -> str:
 
 
 def main() -> None:
-    report = asyncio.run(run_qa(progress=True))
+    parser = argparse.ArgumentParser(description="Run the graded QA suite.")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="keep results already in the report and only run the missing queries",
+    )
+    parser.add_argument(
+        "--only",
+        metavar="IDS",
+        help="re-run just these query ids (e.g. --only 4 or --only 4,7). Implies --resume, "
+        "so the other queries keep their existing results.",
+    )
+    args = parser.parse_args()
+
+    queries = TEST_QUERIES
+    resume = args.resume
+
+    if args.only:
+        wanted = {int(i) for i in args.only.replace(" ", "").split(",") if i}
+        unknown = wanted - {q.id for q in TEST_QUERIES}
+        if unknown:
+            raise SystemExit(f"no such query id(s): {sorted(unknown)}")
+        # Drop the named queries from the report so --resume re-runs exactly those.
+        keep = {k: v for k, v in load_previous_results().items() if k not in wanted}
+        _checkpoint(QAReport(results=sorted(keep.values(), key=lambda r: r.id)))
+        resume = True
+        print(f"re-running quer{'y' if len(wanted) == 1 else 'ies'} {sorted(wanted)}", flush=True)
+
+    report = asyncio.run(run_qa(progress=True, queries=queries, resume=resume))
     print(render(report))
     _checkpoint(report)
     print(f"written: {settings().qa_report_path}")

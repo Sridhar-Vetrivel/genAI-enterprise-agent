@@ -34,6 +34,12 @@ index:  ## Chunk + embed the docs corpus into the vector index (run once)
 qa:  ## Run the 12 test queries + Judge Agent, emit the QA evidence report
 	$(PY) -m psiog_kendra.qa.report
 
+qa-resume:  ## Continue a killed QA run: keep what is in the report, run only what is missing
+	$(PY) -m psiog_kendra.qa.report --resume
+
+qa-only:  ## Re-run just one or more queries, e.g. make qa-only Q=4  /  make qa-only Q=4,7
+	$(PY) -m psiog_kendra.qa.report --only "$(Q)"
+
 evidence:  ## Regenerate docs/qa/ (one evidence page per test query) from the QA report
 	$(PY) -m psiog_kendra.qa.evidence
 

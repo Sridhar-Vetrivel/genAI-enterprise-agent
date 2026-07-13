@@ -8,19 +8,19 @@ Auto-generated from the last `make qa` run. One page per test query: what was as
 |---|---|---|
 | Routing accuracy | 100.0% | **100.0%** |
 | Hallucination rate | &lt;10.0% | **0.0%** |
-| Answers carrying citations | all | **1 / 1** |
-| Claims grounded | — | **6 / 6** |
-| Answers verified by the Judge | all | **1 / 1** |
+| Answers carrying citations | all | **2 / 2** |
+| Claims grounded | — | **9 / 9** |
+| Answers verified by the Judge | all | **2 / 2** |
 | LLM cost | ₹0 | **₹0** (local `gemma3:4b` / `gemma3:1b`) |
 
-Queries completed in this run: **1 / 12**
+Queries completed in this run: **2 / 12**
 
 ## Per-query evidence
 
 | # | Query | Expected | Routed to | Cites | Halluc. | Evidence |
 |---|---|---|---|---|---|---|
 | 1 | Did yesterday's ETL pipeline for the sales data run successfully? | `data-platform` | ✅ `data-platform` | 2 | 0.0% | [q01.md](q01.md) |
-| 2 | What was the error in the last failed Databricks job? | `data-platform` | _not yet run_ | — | — | — |
+| 2 | What was the error in the last failed Databricks job? | `data-platform` | ✅ `data-platform` | 1 | 0.0% | [q02.md](q02.md) |
 | 3 | Did the latest deployment of the payments service pass all quality gates? | `devops` | _not yet run_ | — | — | — |
 | 4 | What was the last deployment date for the auth service? | `devops` | _not yet run_ | — | — | — |
 | 5 | What is the current deal status for Acme Corp? | `crm` | _not yet run_ | — | — | — |

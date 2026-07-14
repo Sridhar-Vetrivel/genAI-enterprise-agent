@@ -142,7 +142,7 @@ and returning a cited answer. Execution IDs are in `docs/qa/traces.md`.
 | EV-08 | Q08 "What does the architecture doc say about the ingestion pipeline?" routes to `docs` and cites the architecture document | D-02, D-04 | `docs/images/Q08.png` | `docs/qa/q08.md` @ «commit» |
 | EV-09 | Q09 (cross-domain) "Did last night's pipeline failure affect any CRM customer sync?" routes to `data-platform` + `crm` and traces the failure to the affected accounts, citing both systems | D-02, D-03, D-06, D-07 | ⚠️ **RE-CAPTURE** — see note below | `docs/qa/q09.md` @ «commit» |
 | EV-10 | Q10 (cross-domain) "The ingestion job failed — is there a fix in the runbooks?" routes to `data-platform` + `docs` and joins the live failure to the documented recovery steps, citing both | D-02, D-03, D-04, D-07 | ⚠️ **RE-CAPTURE** — see note below | `docs/qa/q10.md` @ «commit» |
-| EV-11 | Q11 (cross-domain) "What's the status of the latest deployment and are there any known issues?" routes to `devops` + `docs` | D-02, D-04, D-05, D-07 | ⚠️ **RE-CAPTURE** — see note below | `docs/qa/q11.md` @ «commit» |
+| EV-11 | Q11 (cross-domain) "What's the status of the latest deployment and are there any known issues?" routes to `devops` + `docs` and cites both the GitHub Actions runs and the runbook/incident documents | D-02, D-04, D-05, D-07 | `docs/images/Q11.png` | `docs/qa/q11.md` @ «commit» |
 | EV-12 | Q12 (cross-domain) "Give me a full status update" routes to **all four domains** and synthesises one answer citing across every system | D-02 … D-07 | `docs/images/Q12.png` | `docs/qa/q12.md` @ «commit» |
 | EV-13 | The graded QA run: routing accuracy and hallucination rate across all 12 queries | D-07 | «terminal screenshot of `make qa`» | `data/qa_report.json` @ «commit» |
 | EV-14 | Full offline test suite passing, with the measured coverage figure | D-08 | «terminal screenshot of `make cov`» | CI run / `make cov` @ «commit» |
@@ -156,7 +156,7 @@ and returning a cited answer. Execution IDs are in `docs/qa/traces.md`.
 > each query to the control-plane execution ID to open in the UI. Run `make evidence` to
 > regenerate the pages from the QA report.
 
-#### ⚠️ Four screenshots must be re-captured before submitting
+#### ⚠️ Three screenshots must be re-captured before submitting
 
 **EV-07 and EV-10 are currently screenshots of a broken run.** Both show
 `answer_docs_question` returning *"The indexed internal documentation does not cover this
@@ -166,12 +166,12 @@ index-cp`, now run automatically by `make agents`). Pasting these would show an 
 **Succeeded** badge over an answer admitting it knows nothing — for the two blocks meant to prove
 the RAG deliverable (D-04). Do not use `docs/images/Q07.png` or `docs/images/Q10.png`.
 
-**EV-09 and EV-11 currently show only one specialist.** `docs/images/Q09.png` is the
-`answer_data_question` sub-call and `docs/images/Q11.png` is the `answer_devops_question`
-sub-call. These are cross-domain queries whose entire claim is that the coordinator called **two**
-specialists and synthesised across them — a single-agent frame does not prove that caption.
+**EV-09 currently shows only one specialist.** `docs/images/Q09.png` is the
+`answer_data_question` sub-call. Q09 is a cross-domain query whose entire claim is that the
+coordinator called **two** specialists and synthesised across them — a single-agent frame does
+not prove that caption.
 
-Re-capture all four from the **`coordinator.ask`** execution (not the specialist sub-call), at
+Re-capture these three from the **`coordinator.ask`** execution (not the specialist sub-call), at
 <http://localhost:8080/ui/>:
 
 | EV | Open this execution ID | Should show |
@@ -179,9 +179,10 @@ Re-capture all four from the **`coordinator.ask`** execution (not the specialist
 | EV-07 | `exec_20260714_144630_ebji8tdr` | routed `docs`, 4 citations, 123.8s |
 | EV-09 | `exec_20260714_142110_b9u0edtk` | routed `crm` + `data-platform`, 3 citations, 340.6s |
 | EV-10 | `exec_20260714_145055_3hvpsfti` | routed `data-platform` + `docs`, 4 citations, 239.8s |
-| EV-11 | `exec_20260714_145520_dxtvhyol` | routed `devops` + `docs`, 4 citations, 409.5s |
 
 Make sure the **`domains_used`** field is visible in the frame — that is what proves the routing.
+`docs/images/Q11.png` (EV-11) is the model to copy: it shows `ask` on `coordinator`,
+`domains_used: ["devops", "docs"]`, and citations spanning both systems.
 
 ### 4.2 Evidence Blocks
 
@@ -213,7 +214,7 @@ above it. **Do not reuse a screenshot across two EV IDs.**
 | EV-08 | `docs/images/Q08.png` |
 | EV-09 | ⚠️ re-capture `exec_20260714_142110_b9u0edtk` |
 | EV-10 | ⚠️ re-capture `exec_20260714_145055_3hvpsfti` |
-| EV-11 | ⚠️ re-capture `exec_20260714_145520_dxtvhyol` |
+| EV-11 | `docs/images/Q11.png` |
 | EV-12 | `docs/images/Q12.png` |
 | EV-13 | «terminal screenshot of `make qa`» |
 | EV-14 | «terminal screenshot of `make cov`» |

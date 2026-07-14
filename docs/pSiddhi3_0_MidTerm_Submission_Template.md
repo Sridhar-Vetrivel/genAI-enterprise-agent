@@ -74,13 +74,13 @@ Agent (QA). Full reconciliation in Section 7.
 
 | ID | Planned Deliverable | Planned Window | Status | Evidence ID(s) |
 |---|---|---|---|---|
-| D-01 | AgentField control plane via Docker Compose; Azure VM provisioned; OpenRouter connected | Week 4 | **Partial** | EV-16 |
-| D-02 | Coordinator Agent — LLM intent classification + routing; Pydantic schemas defined | Week 5 | **Done** | EV-01 … EV-12 |
-| D-03 | Data Platform Agent — Databricks REST connected; job status/history; unit tests | Week 6 | **Done** | EV-01, EV-02, EV-09, EV-10, EV-12 |
-| D-04 | Docs Agent + RAG index — docs chunked/embedded/indexed; similarity search working | Week 7 | **Done** | EV-07, EV-08, EV-10, EV-11, EV-12, EV-15 |
-| D-05 | DevOps Agent — GitHub/Azure DevOps connected; build status, deployments, quality gates | Week 8 | **Done** | EV-03, EV-04, EV-11, EV-12 |
-| D-06 | CRM Agent — CRM/mock connected; contact/deal/account queries | Week 9 | **Done** | EV-05, EV-06, EV-09, EV-12 |
-| D-07 | ≥6 of 12 test queries returning grounded, cited responses | Week 9–10 | **Done** | EV-01 … EV-13 |
+| D-01 | AgentField control plane via Docker Compose; Azure VM provisioned; OpenRouter connected | Week 4 | **Partial** | EV-16, EV-18 |
+| D-02 | Coordinator Agent — LLM intent classification + routing; Pydantic schemas defined | Week 5 | **Done** | EV-01 … EV-12, EV-17, EV-18 |
+| D-03 | Data Platform Agent — Databricks REST connected; job status/history; unit tests | Week 6 | **Done** | EV-01, EV-02, EV-09, EV-10, EV-12, EV-17 |
+| D-04 | Docs Agent + RAG index — docs chunked/embedded/indexed; similarity search working | Week 7 | **Done** | EV-07, EV-08, EV-10, EV-11, EV-12, EV-15, EV-17 |
+| D-05 | DevOps Agent — GitHub/Azure DevOps connected; build status, deployments, quality gates | Week 8 | **Done** | EV-03, EV-04, EV-11, EV-12, EV-17 |
+| D-06 | CRM Agent — CRM/mock connected; contact/deal/account queries | Week 9 | **Done** | EV-05, EV-06, EV-09, EV-12, EV-17 |
+| D-07 | ≥6 of 12 test queries returning grounded, cited responses | Week 9–10 | **Done** | EV-01 … EV-13, EV-18 |
 | D-08 | Unit tests passing for skill functions; coverage ≥50% | Week 9–10 | **Done** | EV-14 |
 
 **Why D-01 is Partial and not Done.** The approved deliverable is three things: the control
@@ -105,18 +105,20 @@ mid-term docs submitted. Measured against that:
 | Semantic index populated | yes | **21 chunks, 768-dim, 0 orphans** |
 | Routing across domains | ≥2 | **all 4 domains, plus cross-domain synthesis** |
 | Grounded / cited responses | "initial" | **12 of 12 queries, 100% routing accuracy** |
-| Unit tests passing | yes | **394 passing, 93% coverage** |
+| Unit tests passing | yes | **408 passing, 93% coverage** |
 
 **Completion: ~75% of the Weeks 4–17 scope.**
 
 Defensible from the table above: seven of eight Weeks 4–9 deliverables are Done and one is
 Partial; the Week 10 checkpoint is met on every item and exceeded on most. The remaining ~25%
-is Weeks 11–17 work that has not started — hosting on Azure, OpenRouter provisioning, the
-AgentField DAG-trace UI, CI hardening, and the final demo — and is listed in Section 9.
+is Weeks 11–17 work that has not started — hosting on Azure, OpenRouter provisioning, CI
+hardening, live REST credentials, and the final demo — and is listed in Section 9.
 
-**Demonstrable live state:** ☑ **End-to-end working** — `make ask Q="..."` answers any of the
-12 queries live, routing through the coordinator to the specialists and returning cited
-answers.
+**Demonstrable live state:** ☑ **End-to-end working** — all 12 queries run live **through the
+AgentField control plane**: the coordinator classifies intent with the LLM, dispatches to the
+specialist nodes via `app.call()`, and returns one cited answer, every hop traced as a DAG
+(EV-18). Routing accuracy measured through the control plane is **100% (12/12)**, and **12 of 12**
+answers carry at least one citation. `make ask Q="..."` does the same from the terminal.
 
 ---
 
@@ -124,33 +126,67 @@ answers.
 
 ### 4.1 Evidence Index
 
-| Evidence ID | Caption (what it proves) | Deliverable ID(s) | Verifiable link |
-|---|---|---|---|
-| EV-01 | Q01 "Did yesterday's ETL pipeline for the sales data run successfully?" routes to `data-platform` and answers citing the Databricks run | D-02, D-03 | `docs/qa/q01.md` @ «commit» |
-| EV-02 | Q02 "What was the error in the last failed Databricks job?" routes to `data-platform` and quotes the SchemaMismatchException from the cited run | D-02, D-03 | `docs/qa/q02.md` @ «commit» |
-| EV-03 | Q03 "Did the latest deployment of the payments service pass all quality gates?" routes to `devops` and cites the GitHub Actions run | D-02, D-05 | `docs/qa/q03.md` @ «commit» |
-| EV-04 | Q04 "What was the last deployment date for the auth service?" routes to `devops` and cites the deploy-auth run | D-02, D-05 | `docs/qa/q04.md` @ «commit» |
-| EV-05 | Q05 "What is the current deal status for Acme Corp?" routes to `crm` and cites the account and the deal | D-02, D-06 | `docs/qa/q05.md` @ «commit» |
-| EV-06 | Q06 "Who is the account owner for TechStart Ltd?" routes to `crm` and cites the CRM account | D-02, D-06 | `docs/qa/q06.md` @ «commit» |
-| EV-07 | Q07 "What is the runbook for a schema mismatch?" routes to `docs` and cites 5 retrieved document sections | D-02, D-04 | `docs/qa/q07.md` @ «commit» |
-| EV-08 | Q08 "What does the architecture doc say about the ingestion pipeline?" routes to `docs` and cites the architecture document | D-02, D-04 | `docs/qa/q08.md` @ «commit» |
-| EV-09 | Q09 (cross-domain) "Did last night's pipeline failure affect any CRM customer sync?" routes to `data-platform` + `crm` and traces the failure to three stale accounts, citing both systems | D-02, D-03, D-06, D-07 | `docs/qa/q09.md` @ «commit» |
-| EV-10 | Q10 (cross-domain) "The ingestion job failed — is there a fix in the runbooks?" routes to `data-platform` + `docs` and joins the live failure to the documented recovery steps, citing both | D-02, D-03, D-04, D-07 | `docs/qa/q10.md` @ «commit» |
-| EV-11 | Q11 (cross-domain) "What's the status of the latest deployment and are there any known issues?" routes to `devops` + `docs` | D-02, D-04, D-05, D-07 | `docs/qa/q11.md` @ «commit» |
-| EV-12 | Q12 (cross-domain) "Give me a full status update" routes to **all four domains** and synthesises one answer citing across every system | D-02 … D-07 | `docs/qa/q12.md` @ «commit» |
-| EV-13 | The graded QA run: routing accuracy and hallucination rate across all 12 queries | D-07 | `data/qa_report.json` @ «commit» |
-| EV-14 | Full offline test suite passing, with the measured coverage figure | D-08 | CI run / `make cov` @ «commit» |
-| EV-15 | The documentation corpus chunked, embedded and indexed for similarity search | D-04 | `make index` @ «commit» |
-| EV-16 | The AgentField control plane running, with all five agent nodes registered | D-01 | `deploy/docker-compose.yml` @ «commit» |
+Every query below was executed **through the AgentField control plane** (`coordinator.ask`),
+so each screenshot shows the LLM classifying intent, dispatching to specialists via `app.call()`,
+and returning a cited answer. Execution IDs are in `docs/qa/traces.md`.
 
-> Every row above has a matching page in **`docs/qa/`** giving the exact command, what must be
-> visible in the frame, and a pre-filled evidence-block header table. Run `make evidence` to
-> regenerate them from the QA report.
+| Evidence ID | Caption (what it proves) | Deliverable ID(s) | Screenshot | Verifiable link |
+|---|---|---|---|---|
+| EV-01 | Q01 "Did yesterday's ETL pipeline for the sales data run successfully?" routes to `data-platform` and answers citing the Databricks run | D-02, D-03 | `docs/images/Q01-Ev01.png` | `docs/qa/q01.md` @ «commit» |
+| EV-02 | Q02 "What was the error in the last failed Databricks job?" routes to `data-platform` and quotes the SchemaMismatchException from the cited run | D-02, D-03 | `docs/images/Q02.png` | `docs/qa/q02.md` @ «commit» |
+| EV-03 | Q03 "Did the latest deployment of the payments service pass all quality gates?" routes to `devops` and cites the GitHub Actions run | D-02, D-05 | `docs/images/Q03-Ev03.png` | `docs/qa/q03.md` @ «commit» |
+| EV-04 | Q04 "What was the last deployment date for the auth service?" routes to `devops` and cites the deploy-auth run | D-02, D-05 | `docs/images/Q04.png` | `docs/qa/q04.md` @ «commit» |
+| EV-05 | Q05 "What is the current deal status for Acme Corp?" routes to `crm` and cites the account and the deal | D-02, D-06 | `docs/images/Q05.png` | `docs/qa/q05.md` @ «commit» |
+| EV-06 | Q06 "Who is the account owner for TechStart Ltd?" routes to `crm` and cites the CRM account | D-02, D-06 | `docs/images/Q06.png` | `docs/qa/q06.md` @ «commit» |
+| EV-07 | Q07 "What is the runbook for a schema mismatch?" routes to `docs` and cites the retrieved document sections | D-02, D-04 | ⚠️ **RE-CAPTURE** — see note below | `docs/qa/q07.md` @ «commit» |
+| EV-08 | Q08 "What does the architecture doc say about the ingestion pipeline?" routes to `docs` and cites the architecture document | D-02, D-04 | `docs/images/Q08.png` | `docs/qa/q08.md` @ «commit» |
+| EV-09 | Q09 (cross-domain) "Did last night's pipeline failure affect any CRM customer sync?" routes to `data-platform` + `crm` and traces the failure to the affected accounts, citing both systems | D-02, D-03, D-06, D-07 | ⚠️ **RE-CAPTURE** — see note below | `docs/qa/q09.md` @ «commit» |
+| EV-10 | Q10 (cross-domain) "The ingestion job failed — is there a fix in the runbooks?" routes to `data-platform` + `docs` and joins the live failure to the documented recovery steps, citing both | D-02, D-03, D-04, D-07 | ⚠️ **RE-CAPTURE** — see note below | `docs/qa/q10.md` @ «commit» |
+| EV-11 | Q11 (cross-domain) "What's the status of the latest deployment and are there any known issues?" routes to `devops` + `docs` | D-02, D-04, D-05, D-07 | ⚠️ **RE-CAPTURE** — see note below | `docs/qa/q11.md` @ «commit» |
+| EV-12 | Q12 (cross-domain) "Give me a full status update" routes to **all four domains** and synthesises one answer citing across every system | D-02 … D-07 | `docs/images/Q12.png` | `docs/qa/q12.md` @ «commit» |
+| EV-13 | The graded QA run: routing accuracy and hallucination rate across all 12 queries | D-07 | «terminal screenshot of `make qa`» | `data/qa_report.json` @ «commit» |
+| EV-14 | Full offline test suite passing, with the measured coverage figure | D-08 | «terminal screenshot of `make cov`» | CI run / `make cov` @ «commit» |
+| EV-15 | The documentation corpus chunked, embedded and indexed for similarity search | D-04 | «terminal screenshot of `make index`» | `make index` @ «commit» |
+| EV-16 | The AgentField control plane running, with **all five agent nodes registered, Ready and Active** | D-01 | `docs/images/Agents-Up-and-Running.png` | `deploy/docker-compose.yml` @ «commit» |
+| EV-17 | Each of the five agents is a **distinct registered node** with its own reasoners, skills and DID — not one LLM behind a long prompt | D-02, D-03, D-04, D-05, D-06 | `docs/images/co-ordinator.png`, `docs/images/data-agent-skills-and-reasoner.png`, `docs/images/devops-agent-skills-and-reasoners.png`, `docs/images/crm-agent-skills-and-reasoner.png`, `docs/images/Docs-agent-skills-and-reasoner.png` | `agents/` @ «commit» |
+| EV-18 | The **DAG of a cross-domain query**: `coordinator.ask` fanning out to all four specialists through the control plane and synthesising one answer | D-01, D-02, D-07 | `docs/images/Q12-Workflow-View.png` | `docs/qa/traces.md` @ «commit» |
+
+> Every query row above has a matching page in **`docs/qa/`** giving the exact command, what must
+> be visible in the frame, and a pre-filled evidence-block header table. `docs/qa/traces.md` maps
+> each query to the control-plane execution ID to open in the UI. Run `make evidence` to
+> regenerate the pages from the QA report.
+
+#### ⚠️ Four screenshots must be re-captured before submitting
+
+**EV-07 and EV-10 are currently screenshots of a broken run.** Both show
+`answer_docs_question` returning *"The indexed internal documentation does not cover this
+question"* with **zero citations**, in 5s and 2s — the docs agent never retrieved anything. The
+cause was a real bug (the control plane's vector memory was never indexed; fixed by `make
+index-cp`, now run automatically by `make agents`). Pasting these would show an evaluator a green
+**Succeeded** badge over an answer admitting it knows nothing — for the two blocks meant to prove
+the RAG deliverable (D-04). Do not use `docs/images/Q07.png` or `docs/images/Q10.png`.
+
+**EV-09 and EV-11 currently show only one specialist.** `docs/images/Q09.png` is the
+`answer_data_question` sub-call and `docs/images/Q11.png` is the `answer_devops_question`
+sub-call. These are cross-domain queries whose entire claim is that the coordinator called **two**
+specialists and synthesised across them — a single-agent frame does not prove that caption.
+
+Re-capture all four from the **`coordinator.ask`** execution (not the specialist sub-call), at
+<http://localhost:8080/ui/>:
+
+| EV | Open this execution ID | Should show |
+|---|---|---|
+| EV-07 | `exec_20260714_144630_ebji8tdr` | routed `docs`, 4 citations, 123.8s |
+| EV-09 | `exec_20260714_142110_b9u0edtk` | routed `crm` + `data-platform`, 3 citations, 340.6s |
+| EV-10 | `exec_20260714_145055_3hvpsfti` | routed `data-platform` + `docs`, 4 citations, 239.8s |
+| EV-11 | `exec_20260714_145520_dxtvhyol` | routed `devops` + `docs`, 4 citations, 409.5s |
+
+Make sure the **`domains_used`** field is visible in the frame — that is what proves the routing.
 
 ### 4.2 Evidence Blocks
 
-For each EV-ID, paste one full-size, readable screenshot with this header table above it.
-**Do not reuse a screenshot across two EV IDs.**
+For each EV-ID, paste the full-size, readable screenshot named below, with this header table
+above it. **Do not reuse a screenshot across two EV IDs.**
 
 **EV-01 — Q01 routes to data-platform and returns a cited answer**
 
@@ -161,15 +197,67 @@ For each EV-ID, paste one full-size, readable screenshot with this header table 
 | Date captured | «date» |
 | Verifiable link | «GitHub commit URL» |
 
-*(paste screenshot of: `make ask Q="Did yesterday's ETL pipeline for the sales data run successfully?"` — the question, the answer, the `routed to :` line and the `sources :` list must all be in one frame)*
+`docs/images/Q01-Ev01.png`
 
-**EV-02 … EV-16** — same structure. `docs/qa/qNN.md` and `docs/qa/ev-NN-*.md` each carry the
-exact command and the pre-filled header table for that block.
+**EV-02 … EV-18** — same structure. Paste the image named in the Section 4.1 index:
+
+| EV | Image to paste |
+|---|---|
+| EV-01 | `docs/images/Q01-Ev01.png` |
+| EV-02 | `docs/images/Q02.png` |
+| EV-03 | `docs/images/Q03-Ev03.png` |
+| EV-04 | `docs/images/Q04.png` |
+| EV-05 | `docs/images/Q05.png` |
+| EV-06 | `docs/images/Q06.png` |
+| EV-07 | ⚠️ re-capture `exec_20260714_144630_ebji8tdr` |
+| EV-08 | `docs/images/Q08.png` |
+| EV-09 | ⚠️ re-capture `exec_20260714_142110_b9u0edtk` |
+| EV-10 | ⚠️ re-capture `exec_20260714_145055_3hvpsfti` |
+| EV-11 | ⚠️ re-capture `exec_20260714_145520_dxtvhyol` |
+| EV-12 | `docs/images/Q12.png` |
+| EV-13 | «terminal screenshot of `make qa`» |
+| EV-14 | «terminal screenshot of `make cov`» |
+| EV-15 | «terminal screenshot of `make index`» |
+| EV-16 | `docs/images/Agents-Up-and-Running.png` |
+| EV-17 | `docs/images/co-ordinator.png`, `docs/images/data-agent-skills-and-reasoner.png`, `docs/images/devops-agent-skills-and-reasoners.png`, `docs/images/crm-agent-skills-and-reasoner.png`, `docs/images/Docs-agent-skills-and-reasoner.png` |
+| EV-18 | `docs/images/Q12-Workflow-View.png` |
+
+**EV-17 — the five agents are five distinct nodes**
+
+| Field | Value |
+|---|---|
+| What this proves | The architecture is genuinely multi-agent: five separately registered AgentField nodes, each with its own base URL, port, reasoners, skills and DID — not one LLM behind a long system prompt. Non-negotiable design rule #3 in the RFP. |
+| Deliverable ID | D-02, D-03, D-04, D-05, D-06 |
+| Date captured | «date» |
+| Verifiable link | «GitHub commit URL» |
+
+Paste all five node detail pages. Together they show: `coordinator` (2 reasoners — `route_query`,
+`ask`), `data-agent` (`answer_data_question` + `fetch_job_runs`), `devops-agent`
+(`answer_devops_question` + `fetch_workflow_runs`), `crm-agent` (`answer_crm_question` +
+`fetch_crm_records`), `docs-agent` (`answer_docs_question` + `index_documentation` +
+`search_documentation`).
+
+**EV-18 — the cross-domain DAG**
+
+| Field | Value |
+|---|---|
+| What this proves | `coordinator.ask` fans out to **all four specialists** through the control plane and synthesises one cited answer. Every agent-to-agent hop is traced. This is the single clearest picture of the multi-agent design. |
+| Deliverable ID | D-01, D-02, D-07 |
+| Date captured | «date» |
+| Verifiable link | «GitHub commit URL» |
+
+`docs/images/Q12-Workflow-View.png` — the Graph tab of run `run_2026071…ucqqco34`: the
+`Ask` node on `coordinator` branching to `Answer Data Question`, `Answer Crm Question`,
+`Answer Docs Question` and `Answer Devops Question`, all four green, with per-hop durations.
 
 > ⚠️ **Do not screenshot a fallback run.** If the terminal prints
 > `gemma3:4b does not fit in host memory; falling back to gemma3:1b`, the answer came from the
 > weak model and neither the routing nor the answer is representative. Free ~4 GiB of RAM
 > (check `ollama ps`) and run it again.
+>
+> ⚠️ **Do not screenshot a docs answer that says "The indexed internal documentation does not
+> cover this question."** That means the control plane's vector memory is empty. Run
+> `make index-cp` (or just `make agents`, which now does it) and re-run the query.
 
 ---
 
@@ -191,10 +279,10 @@ exact command and the pre-filled header table for that block.
 
 | Test Type | Tests written / run | Coverage achieved (measured) | Target (per proposal) | Evidence ID(s) |
 |---|---|---|---|---|
-| Unit tests (routing, retrieval, sources, prompting, QA) | **394 passing**, 4 skipped | **93%** (`pytest-cov`, `make cov`) | ≥80% overall; ≥50% mid-term interim | EV-14 |
+| Unit tests (routing, retrieval, sources, prompting, QA) | **408 passing**, 4 skipped | **93%** (`pytest-cov`, `make cov`) | ≥80% overall; ≥50% mid-term interim | EV-14 |
 | Routing accuracy (12 mandatory queries, live model) | 12 of 12 | **100%** | 100% | EV-01 … EV-13 |
 | Hallucination rate (Judge Agent, live model) | 12 answers judged | **«FINAL % — from the last `make qa` run»** | <10% | EV-13 |
-| Integration tests (coordinator → specialists → synthesis) | included in the 394 | — | — | EV-14 |
+| Integration tests (coordinator → specialists → synthesis) | included in the 408 | — | — | EV-14 |
 
 **Hallucination rate is `(ungrounded claims / total claims) × 100`**, measured by a dedicated
 **Judge Agent** that re-fetches the raw source content behind every citation *independently of
@@ -226,7 +314,7 @@ finding, never remove one.
 | **nomic-embed-text** — embeddings (768-dim) | *not in the approved list* | **Yes** | ₹0 | **Newly added, and unavoidable: Gemma 3 cannot produce embeddings at all.** The RAG index cannot exist without a separate embedding model. Disclosed in Section 8. |
 | **Pydantic** — structured output (`extra="forbid"`) | Open-source, ₹0 | **Yes** | ₹0 | As approved. Every LLM call returns a validated schema. |
 | **Azure B1s VM** — hosting | 12-month free tier, ₹0 | **No** | ₹0 | Not yet provisioned. Runs locally via Docker Compose. Planned Week 11 (Section 9). |
-| **Pytest + pytest-cov** — QA | Open-source, ₹0 | **Yes** | ₹0 | As approved. 394 tests, 93% coverage. |
+| **Pytest + pytest-cov** — QA | Open-source, ₹0 | **Yes** | ₹0 | As approved. 408 tests, 93% coverage. |
 | **GitHub Actions** — CI | Free tier, ₹0 | **Yes** (workflow committed) | ₹0 | As approved. |
 | **Judge Agent** — hallucination detection | Runs on the same LLM, ₹0 | **Yes** | ₹0 | As approved, and **pulled forward from Week 13 to Week 10** because the QA numbers were needed for this submission. |
 | **Docker / Docker Compose** | Open-source, ₹0 | **Yes** | ₹0 | As approved. |
@@ -268,7 +356,6 @@ budgeted line — costs ₹0 because it runs locally.** The budget is not at ris
 |---|---|---|
 | **OpenRouter provisioning** (part of D-01) | Account/credits not provisioned | Provision, set `AI_MODEL_COMPLEX=google/gemini-2.5-flash`, re-run the QA suite and compare both sets of numbers. **No code change.** — **Week 11** |
 | **Azure B1s VM hosting** (part of D-01) | Not provisioned; not required for any Weeks 4–9 deliverable | Provision the free-tier VM, deploy the Compose stack, expose the control plane — **Week 11** |
-| **AgentField DAG trace UI** | Agents call each other via `app.call()` and are traced, but the trace has not been captured as a demo artefact | Capture a cross-domain query's DAG as a screenshot for the final demo — **Week 12** |
 | **CI hardening** | Workflow is committed and runs the suite; it does not yet gate on coverage or run the live-model tests | Add a coverage gate and a nightly live-model job — **Week 12** |
 | **Live REST source integration** | Implemented and unit-tested, but never run against real credentials | Point at real Databricks / GitHub / CRM endpoints in a sandbox — **Weeks 13–14** |
 | **Judge Agent on a frontier model** | The 4B local judge is measurably unreliable — it waved a fabricated date through, which is why a deterministic fact check now backs it up | Re-run the judge on `gemini-2.5-flash` once OpenRouter is live; compare against the deterministic check — **Week 13** |

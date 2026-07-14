@@ -105,7 +105,7 @@ mid-term docs submitted. Measured against that:
 | Semantic index populated | yes | **21 chunks, 768-dim, 0 orphans** |
 | Routing across domains | ≥2 | **all 4 domains, plus cross-domain synthesis** |
 | Grounded / cited responses | "initial" | **12 of 12 queries, 100% routing accuracy** |
-| Unit tests passing | yes | **408 passing, 93% coverage** |
+| Unit tests passing | yes | **415 passing, 93% coverage** |
 
 **Completion: ~75% of the Weeks 4–17 scope.**
 
@@ -145,8 +145,8 @@ and returning a cited answer. Execution IDs are in `docs/qa/traces.md`.
 | EV-11 | Q11 (cross-domain) "What's the status of the latest deployment and are there any known issues?" routes to `devops` + `docs` and cites both the GitHub Actions runs and the runbook/incident documents | D-02, D-04, D-05, D-07 | `docs/images/Q11.png` | `docs/qa/q11.md` @ «commit» |
 | EV-12 | Q12 (cross-domain) "Give me a full status update" routes to **all four domains** and synthesises one answer citing across every system | D-02 … D-07 | `docs/images/Q12.png` | `docs/qa/q12.md` @ «commit» |
 | EV-13 | The graded QA run: routing accuracy and hallucination rate across all 12 queries | D-07 | «terminal screenshot of `make qa`» | `data/qa_report.json` @ «commit» |
-| EV-14 | Full offline test suite passing, with the measured coverage figure | D-08 | «terminal screenshot of `make cov`» | CI run / `make cov` @ «commit» |
-| EV-15 | The documentation corpus chunked, embedded and indexed for similarity search | D-04 | «terminal screenshot of `make index`» | `make index` @ «commit» |
+| EV-14 | Full offline test suite passing, with the measured coverage figure (415 passed, 93.11%) | D-08 | ⚠️ **RE-CAPTURE** — `docs/images/ev-14.png` shows 408, now stale | CI run / `make cov` @ «commit» |
+| EV-15 | The documentation corpus chunked, embedded and indexed for similarity search — 21 chunks, data-validation gate passed | D-04 | `docs/images/ev-15.png` | `make index` @ «commit» |
 | EV-16 | The AgentField control plane running, with **all five agent nodes registered, Ready and Active** | D-01 | `docs/images/Agents-Up-and-Running.png` | `deploy/docker-compose.yml` @ «commit» |
 | EV-17 | Each of the five agents is a **distinct registered node** with its own reasoners, skills and DID — not one LLM behind a long prompt | D-02, D-03, D-04, D-05, D-06 | `docs/images/co-ordinator.png`, `docs/images/data-agent-skills-and-reasoner.png`, `docs/images/devops-agent-skills-and-reasoners.png`, `docs/images/crm-agent-skills-and-reasoner.png`, `docs/images/Docs-agent-skills-and-reasoner.png` | `agents/` @ «commit» |
 | EV-18 | The **DAG of a cross-domain query**: `coordinator.ask` fanning out to all four specialists through the control plane and synthesising one answer | D-01, D-02, D-07 | `docs/images/Q12-Workflow-View.png` | `docs/qa/traces.md` @ «commit» |
@@ -184,6 +184,45 @@ Make sure the **`domains_used`** field is visible in the frame — that is what 
 `docs/images/Q11.png` (EV-11) is the model to copy: it shows `ask` on `coordinator`,
 `domains_used: ["devops", "docs"]`, and citations spanning both systems.
 
+#### 📸 EV-13 — the graded QA run (routing accuracy + hallucination rate)
+
+This is the screenshot that carries the two numbers Section 6 is scored on, so it has to be the
+**final** run — after every QA fix is in. Steps:
+
+```bash
+# 1. Free the RAM. gemma3:4b needs ~4 GiB; if it will not load, the gateway silently
+#    degrades to gemma3:1b and the whole run is worthless as evidence.
+ollama ps                      # should be empty or show gemma3:4b, never gemma3:1b
+make agents-down               # the 5 agent nodes each hold a model handle
+
+# 2. Run the graded suite. ~60 local LLM calls, roughly an hour on CPU.
+#    It prints each query as it lands and checkpoints to data/qa_report.json,
+#    so a killed run is not a lost run (resume with `make qa-resume`).
+make qa
+```
+
+The run ends with a summary block. **Screenshot that block**, and make sure all of this is in
+one frame, full-size:
+
+| Must be visible | Why |
+|---|---|
+| `queries: 12` | proves all twelve were graded, not a subset |
+| `routing_accuracy_pct: 100.0` | the Section 6 routing figure |
+| `hallucination_rate_pct: <N>` | **the Section 6 hallucination figure** |
+| `total_claims` / `grounded_claims` | proves the rate is `(ungrounded / total) × 100`, not asserted |
+| `answers_with_citations: 12` | proves every answer is grounded |
+
+Then paste the measured `hallucination_rate_pct` into the Section 6 table below, replacing
+«FINAL %». **The number in the screenshot and the number in the table must be identical** — the
+evaluator cross-checks Section 6 against its evidence block.
+
+> ⚠️ If the summary prints `queries: 11` or fewer, the run did not finish. Resume it with
+> `make qa-resume` rather than screenshotting a partial run.
+>
+> ⚠️ If any query shows `UNVERIFIED`, the judge enumerated no claims for it — a known
+> `gemma3:4b` flake. Re-grade the stored answers with `make qa-rejudge` (12 LLM calls, not 60)
+> before capturing.
+
 ### 4.2 Evidence Blocks
 
 For each EV-ID, paste the full-size, readable screenshot named below, with this header table
@@ -217,8 +256,8 @@ above it. **Do not reuse a screenshot across two EV IDs.**
 | EV-11 | `docs/images/Q11.png` |
 | EV-12 | `docs/images/Q12.png` |
 | EV-13 | «terminal screenshot of `make qa`» |
-| EV-14 | «terminal screenshot of `make cov`» |
-| EV-15 | «terminal screenshot of `make index`» |
+| EV-14 | ⚠️ re-capture `make cov` (must read **415 passed**, 93.11%) |
+| EV-15 | `docs/images/ev-15.png` |
 | EV-16 | `docs/images/Agents-Up-and-Running.png` |
 | EV-17 | `docs/images/co-ordinator.png`, `docs/images/data-agent-skills-and-reasoner.png`, `docs/images/devops-agent-skills-and-reasoners.png`, `docs/images/crm-agent-skills-and-reasoner.png`, `docs/images/Docs-agent-skills-and-reasoner.png` |
 | EV-18 | `docs/images/Q12-Workflow-View.png` |
@@ -280,10 +319,10 @@ Paste all five node detail pages. Together they show: `coordinator` (2 reasoners
 
 | Test Type | Tests written / run | Coverage achieved (measured) | Target (per proposal) | Evidence ID(s) |
 |---|---|---|---|---|
-| Unit tests (routing, retrieval, sources, prompting, QA) | **408 passing**, 4 skipped | **93%** (`pytest-cov`, `make cov`) | ≥80% overall; ≥50% mid-term interim | EV-14 |
+| Unit tests (routing, retrieval, sources, prompting, QA) | **415 passing**, 4 skipped | **93.11%** (`pytest-cov`, `make cov`) | ≥80% overall; ≥50% mid-term interim | EV-14 |
 | Routing accuracy (12 mandatory queries, live model) | 12 of 12 | **100%** | 100% | EV-01 … EV-13 |
 | Hallucination rate (Judge Agent, live model) | 12 answers judged | **«FINAL % — from the last `make qa` run»** | <10% | EV-13 |
-| Integration tests (coordinator → specialists → synthesis) | included in the 408 | — | — | EV-14 |
+| Integration tests (coordinator → specialists → synthesis) | included in the 415 | — | — | EV-14 |
 
 **Hallucination rate is `(ungrounded claims / total claims) × 100`**, measured by a dedicated
 **Judge Agent** that re-fetches the raw source content behind every citation *independently of
@@ -315,7 +354,7 @@ finding, never remove one.
 | **nomic-embed-text** — embeddings (768-dim) | *not in the approved list* | **Yes** | ₹0 | **Newly added, and unavoidable: Gemma 3 cannot produce embeddings at all.** The RAG index cannot exist without a separate embedding model. Disclosed in Section 8. |
 | **Pydantic** — structured output (`extra="forbid"`) | Open-source, ₹0 | **Yes** | ₹0 | As approved. Every LLM call returns a validated schema. |
 | **Azure B1s VM** — hosting | 12-month free tier, ₹0 | **No** | ₹0 | Not yet provisioned. Runs locally via Docker Compose. Planned Week 11 (Section 9). |
-| **Pytest + pytest-cov** — QA | Open-source, ₹0 | **Yes** | ₹0 | As approved. 408 tests, 93% coverage. |
+| **Pytest + pytest-cov** — QA | Open-source, ₹0 | **Yes** | ₹0 | As approved. 415 tests, 93% coverage. |
 | **GitHub Actions** — CI | Free tier, ₹0 | **Yes** (workflow committed) | ₹0 | As approved. |
 | **Judge Agent** — hallucination detection | Runs on the same LLM, ₹0 | **Yes** | ₹0 | As approved, and **pulled forward from Week 13 to Week 10** because the QA numbers were needed for this submission. |
 | **Docker / Docker Compose** | Open-source, ₹0 | **Yes** | ₹0 | As approved. |

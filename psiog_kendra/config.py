@@ -87,6 +87,27 @@ class Settings:
     node_docs: str = field(default_factory=lambda: _env("NODE_DOCS_AGENT", "docs-agent"))
     node_judge: str = field(default_factory=lambda: _env("NODE_JUDGE_AGENT", "judge-agent"))
 
+    # ---------------- Agent node ports ----------------
+    # Each node serves its own FastAPI app, and AgentField defaults every one of them to
+    # 8001. Started together on one host, the first node wins the socket and the other
+    # four die on "address already in use" -- *after* they have registered with the
+    # control plane. The fleet then looks healthy (5 nodes listed) while 4 of them are
+    # dead, and every `app.call()` to them hangs. One port per node, explicitly.
+    port_coordinator: int = field(default_factory=lambda: _int("PORT_COORDINATOR", 8001))
+    port_data: int = field(default_factory=lambda: _int("PORT_DATA_AGENT", 8002))
+    port_devops: int = field(default_factory=lambda: _int("PORT_DEVOPS_AGENT", 8003))
+    port_crm: int = field(default_factory=lambda: _int("PORT_CRM_AGENT", 8004))
+    port_docs: int = field(default_factory=lambda: _int("PORT_DOCS_AGENT", 8005))
+
+    # The host the CONTROL PLANE uses to call a node back. The nodes run on the host; the
+    # control plane runs in Docker, where "localhost" is the container itself -- so a node
+    # that registers `http://localhost:8002` tells the control plane to dial its own empty
+    # port, and every call dies on "connection refused". Set to `localhost` when the
+    # control plane is not containerised.
+    agent_callback_host: str = field(
+        default_factory=lambda: _env("AGENT_CALLBACK_HOST", "host.docker.internal")
+    )
+
     # ---------------- Data sources ----------------
     # No Databricks/GitHub/CRM tenant is provisioned, so the specialists read realistic
     # synthetic fixtures. Set USE_MOCK_SOURCES=false and supply credentials to go live.
@@ -176,6 +197,21 @@ class Settings:
             CRM: self.node_crm,
             DOCS: self.node_docs,
         }
+
+    @property
+    def node_to_port(self) -> dict[str, int]:
+        """Node id -> the port that node serves on. Both sides are env-configurable."""
+        return {
+            self.node_coordinator: self.port_coordinator,
+            self.node_data: self.port_data,
+            self.node_devops: self.port_devops,
+            self.node_crm: self.port_crm,
+            self.node_docs: self.port_docs,
+        }
+
+    def callback_url(self, node_id: str) -> str:
+        """The URL the control plane should dial to reach this node."""
+        return f"http://{self.agent_callback_host}:{self.node_to_port[node_id]}"
 
 
 _cached: Settings | None = None

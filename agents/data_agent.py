@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agents._runtime import make_agent
+from agents._runtime import make_agent, serve
 from psiog_kendra.config import settings
 from psiog_kendra.llm import OllamaGateway
 from psiog_kendra.schemas import AgentResponse
@@ -40,4 +40,4 @@ async def answer_data_question(query: str) -> AgentResponse:
 
 
 if __name__ == "__main__":
-    app.run()
+    serve(app)

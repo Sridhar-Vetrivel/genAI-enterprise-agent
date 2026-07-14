@@ -1,4 +1,4 @@
-.PHONY: help install fmt lint test test-live cov index qa ask up down agents clean
+.PHONY: help install fmt lint test test-live cov index qa ask up down agents agents-status agents-down clean
 
 PY := .venv/bin/python
 PIP := .venv/bin/pip
@@ -57,13 +57,23 @@ up:  ## Start the AgentField control plane
 down:  ## Stop the control plane
 	docker compose -f deploy/docker-compose.yml down
 
-agents:  ## Register all 5 agents with the running control plane
-	$(PY) -m agents.data_agent &
-	$(PY) -m agents.devops_agent &
-	$(PY) -m agents.crm_agent &
-	$(PY) -m agents.docs_agent &
-	$(PY) -m agents.coordinator &
-	@echo "5 agents registering with the control plane"
+AGENT_LOGS := data/agents
+NODES := coordinator data_agent devops_agent crm_agent docs_agent
+
+agents:  ## Start all 5 agent nodes and verify every one of them is serving
+	@mkdir -p $(AGENT_LOGS)
+	@for node in $(NODES); do \
+	  $(PY) -m agents.$$node > $(AGENT_LOGS)/$$node.log 2>&1 & \
+	done
+	@echo "starting 5 nodes (logs: $(AGENT_LOGS)/) ..."
+	@sleep 8
+	@$(PY) -m agents.health
+
+agents-status:  ## Check whether all 5 nodes are still serving
+	@$(PY) -m agents.health
+
+agents-down:  ## Stop the 5 agent nodes
+	@pkill -f "$(PY) -m agents\." 2>/dev/null && echo "agents stopped" || echo "no agents running"
 
 clean:
 	rm -rf .pytest_cache .coverage .ruff_cache

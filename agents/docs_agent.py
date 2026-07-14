@@ -13,7 +13,7 @@ Index the corpus into the control plane's vector memory once, at startup:
 
 from __future__ import annotations
 
-from agents._runtime import make_agent
+from agents._runtime import make_agent, serve
 from psiog_kendra.config import settings
 from psiog_kendra.llm import OllamaGateway
 from psiog_kendra.rag.retriever import index_corpus
@@ -57,4 +57,4 @@ async def answer_docs_question(query: str) -> AgentResponse:
 
 
 if __name__ == "__main__":
-    app.run()
+    serve(app)

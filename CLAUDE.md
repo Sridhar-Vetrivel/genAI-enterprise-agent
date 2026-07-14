@@ -74,6 +74,14 @@ Background reading:
   from the prose; the obvious repairs corrupt the very facts the answer exists to quote. Never
   add a `".x"` → `". x"` rule — it turns `part-0007.parquet` into `part-0007. parquet`. Test
   any cleanup against file paths, error messages and timestamps before shipping it.
+- **A registered node is not a running node.** AgentField registers with the control plane
+  *before* it binds its socket, so a node that dies on startup still shows up in the fleet.
+  Two ways that bit us, both now guarded by `tests/unit/test_agent_runtime.py`:
+  `Agent.run()` defaults **every** node to port **8001**, so `make agents` had four of five
+  die on "address already in use"; and a node must register a `callback_url` the control
+  plane can actually dial — it runs in Docker, where `localhost` is the *container*, so
+  `AGENT_CALLBACK_HOST` defaults to `host.docker.internal`. Never trust the node list —
+  run `make agents-status`, which asks each port directly.
 
 ## Non-negotiable design rules
 

@@ -12,7 +12,7 @@ Routes with an LLM, dispatches to the specialists through the control plane via
 
 from __future__ import annotations
 
-from agents._runtime import make_agent
+from agents._runtime import make_agent, serve
 from psiog_kendra.config import settings
 from psiog_kendra.coordinator import Coordinator
 from psiog_kendra.domains import agent_for
@@ -73,4 +73,4 @@ async def ask(query: str) -> CopilotResponse:
 
 
 if __name__ == "__main__":
-    app.run()
+    serve(app)

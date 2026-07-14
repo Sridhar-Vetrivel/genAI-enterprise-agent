@@ -799,6 +799,52 @@ class TestPhantomClaims:
         assert claims_the_answer_actually_makes(claims, answer) == claims
 
 
+class TestDistinctiveTerms:
+    """From QA query 11. The judge produced "The `customer_tier` field was an IntegerType" for
+    an answer that never says IntegerType — it read the type out of the source. Word overlap
+    could not catch it: "customer", "tier" and "field" are all in the answer, so it scored 0.67
+    and sailed past the 0.5 threshold. The give-away is the one long word carrying the claim's
+    whole meaning."""
+
+    Q11_ANSWER = (
+        "The latest deployment failed to complete. The code coverage gate failed at 74% "
+        "(threshold 80%) and the integration tests failed with 3 schema contract test failures "
+        "for the `customer_tier` field expecting a StringType."
+    )
+
+    def test_a_type_the_answer_never_named_is_not_a_claim(self) -> None:
+        # The answer says StringType. The source says the value WAS an IntegerType. The judge
+        # lifted the latter from the record; the answer never asserted it.
+        phantom = "The `customer_tier` field was an IntegerType"
+        assert claims_the_answer_actually_makes([phantom], self.Q11_ANSWER) == []
+
+    def test_a_long_term_lifted_from_the_source_is_dropped(self) -> None:
+        phantom = "The job failed due to an UpstreamDependencyFailed error"
+        assert claims_the_answer_actually_makes([phantom], self.Q11_ANSWER) == []
+
+    def test_the_long_terms_the_answer_did_use_are_kept(self) -> None:
+        # The rule must not eat real claims. Every long word here IS in the answer.
+        claims = [
+            "The integration tests failed with 3 schema contract test failures",
+            "The code coverage gate failed at 74%",
+        ]
+        assert claims_the_answer_actually_makes(claims, self.Q11_ANSWER) == claims
+
+    def test_an_inflection_still_counts_as_spoken(self) -> None:
+        # "deployment" in the answer must satisfy "deployments" in the claim — matched on the
+        # first 8 characters. Otherwise the rule would drop real claims over a plural.
+        answer = "The deployment of the payments service succeeded."
+        claims = ["Deployments of the payments service succeeded"]
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+    def test_a_real_hallucination_carrying_a_long_word_is_still_caught(self) -> None:
+        # The property that must hold: this cannot hide a fabrication. If the ANSWER asserts
+        # the long term, the claim is built from the answer's own words and is still graded.
+        answer = "The job failed with a SchemaMismatchException on the customer_tier column."
+        claims = ["The job failed with a SchemaMismatchException"]
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+
 class TestDeterministicFactCheck:
     """The deterministic half of the judge. It exists because the LLM half missed a
     hallucination: on QA query 11 the answer said "Job 4822 failed on 2026-07-13", the source

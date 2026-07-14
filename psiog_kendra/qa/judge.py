@@ -153,6 +153,12 @@ _STOPWORDS = frozenset(
 # "unit-tests" survive as single identifiers rather than being shredded into fragments.
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9._:\-]*")
 
+# A word this long carries the meaning of the claim it sits in ("integertype",
+# "schemamismatchexception"). If the answer never used it, the judge read it out of the source.
+# Comparisons are made on the first _DISTINCTIVE_LEN characters, so "deployment" still matches
+# "deployments".
+_DISTINCTIVE_LEN = 8
+
 
 def _content_words(text: str) -> list[str]:
     # Strip punctuation from the ENDS only. "records." must match "records", while the dots
@@ -212,6 +218,17 @@ def claims_the_answer_actually_makes(
        even when the answer does mention 4822 — the substantive claim about that job is
        enumerated separately and still graded.
 
+    4. **Distinctive terms.** A claim's long words must be words the answer used. The judge
+       produced "The `customer_tier` field was an IntegerType" for an answer that never says
+       IntegerType — it read the type out of the source. Overlap could not catch it: "customer",
+       "tier" and "field" all appear in the answer, so it scored 0.67 and sailed through. The
+       give-away is the one word that carries the claim's whole meaning, and it is nearly always
+       a long one. Any alphabetic token of >= 8 characters in the claim must appear in the
+       answer, matched on its first 8 characters so that a plural or an inflection still counts.
+       This keeps "schemamismatchexception" and "deployments", and drops "integertype" and
+       "upstreamdependencyfailed" — terms lifted straight out of a record the answer never
+       quoted.
+
     None of this can hide a real hallucination. A hallucination is by definition something
     the ANSWER asserted, so it is built from the answer's own words and its own identifiers.
     Only claims the answer never made fail these tests.
@@ -219,6 +236,7 @@ def claims_the_answer_actually_makes(
     threshold = settings().judge_claim_overlap if min_overlap is None else min_overlap
     spoken = set(_content_words(answer))
     said_ids = _identifiers(answer)
+    stems = {w[:_DISTINCTIVE_LEN] for w in spoken if len(w) >= _DISTINCTIVE_LEN}
     kept = []
     for claim in claims:
         if _FIELD_RESTATEMENT.match(claim):
@@ -229,10 +247,27 @@ def claims_the_answer_actually_makes(
         words = _content_words(claim)
         if not words:
             continue
+        if not _distinctive_terms_spoken(words, stems):
+            continue  # carries a long term the answer never used -- read out of the source
+
         overlap = sum(1 for w in words if w in spoken) / len(words)
         if overlap >= threshold:
             kept.append(claim)
     return kept
+
+
+def _distinctive_terms_spoken(words: list[str], spoken_stems: set[str]) -> bool:
+    """Did the answer use every long word this claim leans on?
+
+    Matched on the first `_DISTINCTIVE_LEN` characters so an inflection ("deployment" vs
+    "deployments") still counts, while a genuinely different term ("integertype") does not.
+    Words with a digit are left to the identifier check, which is stricter.
+    """
+    return all(
+        word[:_DISTINCTIVE_LEN] in spoken_stems
+        for word in words
+        if len(word) >= _DISTINCTIVE_LEN and word.isalpha()
+    )
 
 
 def _claim_key(claim: str) -> str:

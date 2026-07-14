@@ -263,20 +263,29 @@ def build_grounded_prompt(
     ETL pipeline run successfully?", the model picked a run from two days earlier — it had
     no way to know which record "yesterday" pointed at. Every operational question here is
     full of relative dates ("yesterday", "last night", "the latest"), so the anchor matters.
+
+    But the anchor is *context, not a fact*, and the model will repeat it back as though it
+    came from the records: "All five quality gates must pass ... as of 2026-07-14." That date
+    is in no source. It is the anchor, laundered into a claim — a hallucination the deterministic
+    fact check duly caught, and one this prompt created. So the anchor now says, in as many
+    words, that it is not a fact and must not appear in the answer.
     """
     today = today or date.today()
     citation_block = "\n".join(f"- {c}" for c in citations)
     return (
         f"Today's date is {today.isoformat()} ({today.strftime('%A')}). "
         f"Resolve any relative date in the question against it — "
-        f"'yesterday' means {(today - timedelta(days=1)).isoformat()}.\n\n"
+        f"'yesterday' means {(today - timedelta(days=1)).isoformat()}. "
+        f"This date is context for reading the question. It is NOT a fact from the records: "
+        f"never state it, or any part of it, in the answer.\n\n"
         f"{facts_label}\n"
         f"{facts}\n\n"
         f"You may cite only these sources, copied exactly. Never invent one:\n"
         f"{citation_block}\n\n"
         f"Question: {question}\n\n"
         f"Answer the question using only the records above. Pick the record whose timestamp "
-        f"actually matches the question. Write the answer as plain prose for a colleague. "
+        f"actually matches the question. Every date, id and number in your answer must appear "
+        f"in the records above. Write the answer as plain prose for a colleague. "
         f"Put the sources you used in the citations field — do not write them, or any part "
         f"of these instructions, into the answer text."
     )

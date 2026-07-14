@@ -87,6 +87,23 @@ class TestBuildGroundedPrompt:
         )
         assert "timestamp actually matches the question" in prompt
 
+    def test_says_the_date_anchor_is_not_a_fact_to_repeat(self) -> None:
+        # The anchor fixes one bug and caused another. On QA query 11 the answer ended
+        # "...as of 2026-07-14" — today's date, laundered out of this prompt and into a claim.
+        # It appears in no source, so the deterministic fact check correctly called it a
+        # hallucination. The anchor must say, in as many words, that it is not a fact.
+        prompt = build_grounded_prompt(
+            question="q", facts_label="F:", facts="f", citations=["c"], today=date(2026, 7, 14)
+        )
+        assert "NOT a fact" in prompt
+        assert "never state it" in prompt
+
+    def test_tells_the_model_every_number_must_come_from_the_records(self) -> None:
+        prompt = build_grounded_prompt(
+            question="q", facts_label="F:", facts="f", citations=["c"], today=date(2026, 7, 14)
+        )
+        assert "must appear in the records above" in prompt
+
 
 class TestCleanAnswer:
     def test_strips_the_real_world_leak(self) -> None:

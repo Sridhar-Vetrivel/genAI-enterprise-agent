@@ -1,4 +1,4 @@
-.PHONY: help install fmt lint test test-live cov index qa ask up down agents agents-status agents-down clean
+.PHONY: help install fmt lint test test-live cov index index-cp qa ask up down agents agents-status agents-down clean
 
 PY := .venv/bin/python
 PIP := .venv/bin/pip
@@ -28,8 +28,18 @@ test-live:  ## Run the tests that call the real local models (needs ~4 GiB free 
 cov:  ## Test suite with a coverage report (target: >=80%)
 	$(PY) -m pytest --cov=psiog_kendra --cov-report=term-missing --cov-fail-under=80
 
-index:  ## Chunk + embed the docs corpus into the vector index (run once)
+index:  ## Chunk + embed the docs corpus into the LOCAL vector index (used by tests + make qa)
 	$(PY) -m psiog_kendra.index_docs
+
+# There are TWO vector stores, and they are not the same one. `make index` fills the local
+# file the offline suite and `make qa` read. The docs-agent NODE retrieves from AgentField's
+# vector memory, which starts empty and is wiped whenever the control-plane container is
+# recreated. Without this target the docs agent answers "the indexed internal documentation
+# does not cover this question" to everything -- succeeding, citing nothing, looking plausible.
+index-cp:  ## Index the docs corpus into the CONTROL PLANE's vector memory (used by the agents)
+	@curl -fsS -X POST "$${AGENTFIELD_SERVER:-http://localhost:8080}/api/v1/execute/docs-agent.index_documentation" \
+	  -H "Content-Type: application/json" -d '{"input":{}}' | \
+	  $(PY) -c "import json,sys; r=json.load(sys.stdin).get('result') or {}; print('indexed', r.get('chunks_indexed'), 'chunks into the control plane')"
 
 qa:  ## Run the 12 test queries + Judge Agent, emit the QA evidence report
 	$(PY) -m psiog_kendra.qa.report
@@ -60,7 +70,7 @@ down:  ## Stop the control plane
 AGENT_LOGS := data/agents
 NODES := coordinator data_agent devops_agent crm_agent docs_agent
 
-agents:  ## Start all 5 agent nodes and verify every one of them is serving
+agents:  ## Start all 5 agent nodes, verify each is routable, and index the docs corpus
 	@mkdir -p $(AGENT_LOGS)
 	@for node in $(NODES); do \
 	  $(PY) -m agents.$$node > $(AGENT_LOGS)/$$node.log 2>&1 & \
@@ -68,6 +78,7 @@ agents:  ## Start all 5 agent nodes and verify every one of them is serving
 	@echo "starting 5 nodes (logs: $(AGENT_LOGS)/) ..."
 	@sleep 8
 	@$(PY) -m agents.health
+	@$(MAKE) --no-print-directory index-cp
 
 agents-status:  ## Check whether all 5 nodes are still serving
 	@$(PY) -m agents.health

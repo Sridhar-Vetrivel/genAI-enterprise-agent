@@ -91,7 +91,8 @@ async def trace_one(client: httpx.AsyncClient, q: TestQuery, timeout: float) -> 
         "execution_id": body.get("execution_id", ""),
         "run_id": body.get("run_id", ""),
         "error": body.get("error", ""),
-        "domains": sorted(result.get("domains") or []),
+        # CopilotResponse calls this `domains_used`, not `domains`.
+        "domains": sorted(result.get("domains_used") or []),
         "answer": result.get("answer", ""),
         "citations": result.get("citations") or [],
         "seconds": round(time.monotonic() - started, 1),
@@ -118,6 +119,9 @@ def _render(traces: list[dict[str, Any]]) -> str:
     cfg = settings()
     ui = f"{cfg.agentfield_server.rstrip('/')}/ui/"
     good = [t for t in traces if t["status"] == "succeeded"]
+    routed = [t for t in good if t["domains"] == sorted(t["expected_domains"])]
+    cited = [t for t in good if t["citations"]]
+    pct = round(len(routed) / len(traces) * 100, 1) if traces else 0.0
 
     lines = [
         "# Control-Plane Traces — one execution per test query",
@@ -130,7 +134,15 @@ def _render(traces: list[dict[str, Any]]) -> str:
         "",
         f"Open **<{ui}>** and find the execution by its ID.",
         "",
-        f"Traced: **{len(good)} of {len(TEST_QUERIES)} succeeded**.",
+        "| Measured over these traces | Result |",
+        "|---|---|",
+        f"| Executions succeeded | **{len(good)} / {len(TEST_QUERIES)}** |",
+        f"| Routing accuracy (vs. the ground truth in `test_queries.py`) | **{pct}%** "
+        f"({len(routed)}/{len(traces)}) |",
+        f"| Answers carrying at least one citation | **{len(cited)} / {len(traces)}** |",
+        "",
+        "This is routing measured **through the live control plane**, agent to agent — not",
+        "the in-process path the offline suite exercises.",
         "",
         "## 📸 How to take the screenshot",
         "",

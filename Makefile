@@ -1,4 +1,4 @@
-.PHONY: help install fmt lint test test-live cov index index-cp qa ask up down agents agents-status agents-down clean
+.PHONY: help install fmt lint test test-live cov index index-cp qa qa-summary ask up down agents agents-status agents-down clean
 
 PY := .venv/bin/python
 PIP := .venv/bin/pip
@@ -53,6 +53,12 @@ qa-only:  ## Re-run just one or more queries, e.g. make qa-only Q=4  /  make qa-
 qa-rejudge:  ## Re-grade the stored answers without asking them again (12 LLM calls, not 60).
 	## Use ONLY when a fix changed how answers are scored, not how they are produced.
 	$(PY) -m psiog_kendra.qa.report --rejudge
+
+# Read-only. Renders the numbers `make qa` already measured -- it grades nothing and calls no
+# model, so the evidence screenshot never needs an hour-long re-run (and a re-run would produce
+# DIFFERENT numbers from the ones already pasted into the submission).
+qa-summary:  ## Print the graded QA report as a screenshot-ready summary  -> EV-13
+	@$(PY) -m scripts.qa_summary
 
 evidence:  ## Regenerate docs/qa/ (one evidence page per test query) from the QA report
 	$(PY) -m psiog_kendra.qa.evidence

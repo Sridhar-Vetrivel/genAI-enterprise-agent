@@ -50,7 +50,11 @@ class RemoteSpecialist:
         self.node_id = agent_for(domain)
 
     async def answer(self, query: str) -> AgentResponse:
-        result = await app.call(f"{self.node_id}.{REASONER[self.node_id]}", input={"query": query})
+        # `app.call()` takes the target reasoner's parameters as KEYWORD ARGUMENTS. It does
+        # not take an `input=` envelope -- that is the shape of the REST execute API, not of
+        # the SDK call, and passing it sends a parameter literally named "input", leaving the
+        # specialist's own `query` unset: `agent error (422): Missing required field: query`.
+        result = await app.call(f"{self.node_id}.{REASONER[self.node_id]}", query=query)
         # Re-validate: a specialist's reply is untrusted input to the coordinator.
         return AgentResponse.model_validate(result)
 

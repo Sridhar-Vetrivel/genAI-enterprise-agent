@@ -75,10 +75,16 @@ class Settings:
     agentfield_server: str = field(
         default_factory=lambda: _env("AGENTFIELD_SERVER", "http://localhost:8080")
     )
-    # Where the control plane lists the nodes it will actually route to. A node can be
-    # serving happily on its port and still be absent here -- see `agents.health`.
-    agentfield_nodes_path: str = field(
-        default_factory=lambda: _env("AGENTFIELD_NODES_PATH", "/api/v1/nodes")
+    # Where the control plane lists the nodes it will actually route to.
+    #
+    # NOT `/api/v1/nodes`: that lists only nodes whose health_status is "active", and a node
+    # that registered while its port was still binding stays "unknown" forever -- yet the
+    # control plane routes to it perfectly well (verified: an execute call against an
+    # "unknown" node succeeds). Judging health by /nodes therefore condemns working nodes.
+    # The discovery endpoint lists what the control plane can actually call, which is the
+    # only thing "routable" should mean.
+    agentfield_discovery_path: str = field(
+        default_factory=lambda: _env("AGENTFIELD_DISCOVERY_PATH", "/api/v1/discovery/capabilities")
     )
     agentfield_execute_path: str = field(
         default_factory=lambda: _env("AGENTFIELD_EXECUTE_PATH", "/api/v1/execute")

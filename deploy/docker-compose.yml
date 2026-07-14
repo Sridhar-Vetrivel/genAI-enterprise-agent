@@ -12,6 +12,9 @@ services:
     image: ${AGENTFIELD_IMAGE:-agentfield/control-plane:latest}
     container_name: kendra-control-plane
     restart: unless-stopped
+    # Raises the 90s execution timeout, which every coordinator.ask blew through on CPU
+    # inference. See agentfield.yaml.
+    command: ["server", "--config", "/etc/agentfield/agentfield.yaml", "--open=false"]
     ports:
       - "${AGENTFIELD_PORT:-8080}:8080"
     environment:
@@ -20,10 +23,14 @@ services:
       AI_MODEL_COMPLEX: ${AI_MODEL_COMPLEX:-gemma3:4b}
       AI_MODEL_SIMPLE: ${AI_MODEL_SIMPLE:-gemma3:1b}
       AI_EMBED_MODEL: ${AI_EMBED_MODEL:-nomic-embed-text}
+      # A node deep in a 90-second local inference stops heartbeating; at the stock
+      # threshold the control plane reads that as death and evicts it.
+      AGENTFIELD_HEARTBEAT_STALE_THRESHOLD: ${AGENTFIELD_HEARTBEAT_STALE_THRESHOLD:-10m}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - agentfield-data:/data
+      - ./agentfield.yaml:/etc/agentfield/agentfield.yaml:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 15s

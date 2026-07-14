@@ -4,6 +4,7 @@ Follows the structure of docs/RFP_Proposal_Sample_Model_ParticipantsV2.docx (Par
 Participant Proposal), populated with content from docs/solution-proposal.md and
 docs/use-case.md. Uses the AgentField approach only.
 """
+
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -165,10 +166,22 @@ def build():
         doc,
         ["Approach", "Why It Fails"],
         [
-            ["Asking a senior engineer", "Doesn't scale; blocks the expert; knowledge is lost when they leave"],
-            ["Separate dashboards per system", "Still requires the user to know which dashboard, how to query it, and how to correlate results manually"],
-            ["A single-LLM chatbot", "Answers from training data, not live system data — produces confident but unverifiable responses"],
-            ["Basic keyword-based search", "Cannot understand intent, cannot cross-reference systems, cannot synthesize a unified answer"],
+            [
+                "Asking a senior engineer",
+                "Doesn't scale; blocks the expert; knowledge is lost when they leave",
+            ],
+            [
+                "Separate dashboards per system",
+                "Still requires the user to know which dashboard, how to query it, and how to correlate results manually",
+            ],
+            [
+                "A single-LLM chatbot",
+                "Answers from training data, not live system data — produces confident but unverifiable responses",
+            ],
+            [
+                "Basic keyword-based search",
+                "Cannot understand intent, cannot cross-reference systems, cannot synthesize a unified answer",
+            ],
         ],
     )
 
@@ -232,11 +245,31 @@ def build():
         doc,
         ["Agent", "Role", "Data Source"],
         [
-            ["Coordinator", "Query classifier and orchestrator — routes to specialists, synthesizes final response", "LLM (via OpenRouter)"],
-            ["Data Platform Agent", "Databricks specialist — pipeline status, job history, analytics", "Databricks REST API (Jobs, SQL Warehouses)"],
-            ["DevOps Agent", "CI/CD specialist — build status, deployment history, quality gates", "GitHub Actions / Azure DevOps REST API"],
-            ["CRM Agent", "Customer-data specialist — contact records, deal status, account history", "CRM REST API (HubSpot free / mock)"],
-            ["Docs Agent", "Internal-knowledge specialist — semantic search over runbooks and arch docs", "AgentField vector memory (RAG)"],
+            [
+                "Coordinator",
+                "Query classifier and orchestrator — routes to specialists, synthesizes final response",
+                "LLM (via OpenRouter)",
+            ],
+            [
+                "Data Platform Agent",
+                "Databricks specialist — pipeline status, job history, analytics",
+                "Databricks REST API (Jobs, SQL Warehouses)",
+            ],
+            [
+                "DevOps Agent",
+                "CI/CD specialist — build status, deployment history, quality gates",
+                "GitHub Actions / Azure DevOps REST API",
+            ],
+            [
+                "CRM Agent",
+                "Customer-data specialist — contact records, deal status, account history",
+                "CRM REST API (HubSpot free / mock)",
+            ],
+            [
+                "Docs Agent",
+                "Internal-knowledge specialist — semantic search over runbooks and arch docs",
+                "AgentField vector memory (RAG)",
+            ],
         ],
     )
 
@@ -255,9 +288,21 @@ def build():
         doc,
         ["Suggested Tool", "AgentField Replacement", "Reason"],
         [
-            ["LangChain + MS Agent Framework", "AgentField SDK orchestration", "Single framework — no glue code between two separate frameworks"],
-            ["Azure AI Search", "AgentField vector memory fabric", "Built-in set_vector + similarity_search — no external service, no cost"],
-            ["Azure Functions", "AgentField control plane (Docker on Azure VM)", "Simpler deployment, free-tier VM sufficient for POC scale"],
+            [
+                "LangChain + MS Agent Framework",
+                "AgentField SDK orchestration",
+                "Single framework — no glue code between two separate frameworks",
+            ],
+            [
+                "Azure AI Search",
+                "AgentField vector memory fabric",
+                "Built-in set_vector + similarity_search — no external service, no cost",
+            ],
+            [
+                "Azure Functions",
+                "AgentField control plane (Docker on Azure VM)",
+                "Simpler deployment, free-tier VM sufficient for POC scale",
+            ],
         ],
     )
 
@@ -266,9 +311,17 @@ def build():
         doc,
         ["Scope", "What Is Stored", "Example"],
         [
-            ["session", "Conversation history for multi-turn queries", "Previous questions in a session"],
+            [
+                "session",
+                "Conversation history for multi-turn queries",
+                "Previous questions in a session",
+            ],
             ["global", "Pre-indexed documentation embeddings", "Runbook embeddings, doc chunks"],
-            ["run", "Intermediate results within a single query", "Partial responses from each specialist"],
+            [
+                "run",
+                "Intermediate results within a single query",
+                "Partial responses from each specialist",
+            ],
         ],
     )
 
@@ -284,16 +337,76 @@ def build():
         doc,
         ["Tool / Service", "Purpose", "Tier", "Cost/Sem", "Justification"],
         [
-            ["AgentField (self-hosted)", "Multi-agent orchestration + vector memory", "Apache 2.0 OSS", "₹0", "Single framework replaces LangChain + MS Agent FW + Azure AI Search"],
-            ["OpenRouter (LLM gateway)", "LLM inference for routing, response gen, judge", "Pay-per-use", "₹2,500", "Budget ceiling fully allocated — the sole paid component"],
-            ["Ollama + Llama 4 Scout", "Local LLM fallback during development", "Free (local)", "₹0", "Runs on dev machine, zero API cost; full fallback if budget approaches limit"],
-            ["Databricks Free Edition", "Data platform — pipelines and jobs", "Free tier", "₹0", "Free tier covers development and demo workloads"],
-            ["GitHub API + Actions", "DevOps data source + CI for tests", "Free tier", "₹0", "Public API; Actions: 2,000 min/month free"],
-            ["HubSpot Free CRM / mock", "CRM data source", "Free tier", "₹0", "HubSpot free tier or realistic mock data for POC"],
-            ["Azure B1s VM", "Hosts AgentField control plane (Docker)", "Free tier (12-month)", "₹0", "750 hrs/month B1s — sufficient for POC"],
-            ["AgentField vector memory", "Semantic search over internal docs (RAG)", "Built-in", "₹0", "Included in AgentField — replaces Azure AI Search"],
-            ["GitHub Copilot Free", "Dev-time acceleration", "Free tier", "₹0", "Free tier for development"],
-            ["Pytest + GitHub Actions", "QA test suite + CI", "OSS / free", "₹0", "Industry-standard, zero cost"],
+            [
+                "AgentField (self-hosted)",
+                "Multi-agent orchestration + vector memory",
+                "Apache 2.0 OSS",
+                "₹0",
+                "Single framework replaces LangChain + MS Agent FW + Azure AI Search",
+            ],
+            [
+                "OpenRouter (LLM gateway)",
+                "LLM inference for routing, response gen, judge",
+                "Pay-per-use",
+                "₹2,500",
+                "Budget ceiling fully allocated — the sole paid component",
+            ],
+            [
+                "Ollama + Llama 4 Scout",
+                "Local LLM fallback during development",
+                "Free (local)",
+                "₹0",
+                "Runs on dev machine, zero API cost; full fallback if budget approaches limit",
+            ],
+            [
+                "Databricks Free Edition",
+                "Data platform — pipelines and jobs",
+                "Free tier",
+                "₹0",
+                "Free tier covers development and demo workloads",
+            ],
+            [
+                "GitHub API + Actions",
+                "DevOps data source + CI for tests",
+                "Free tier",
+                "₹0",
+                "Public API; Actions: 2,000 min/month free",
+            ],
+            [
+                "HubSpot Free CRM / mock",
+                "CRM data source",
+                "Free tier",
+                "₹0",
+                "HubSpot free tier or realistic mock data for POC",
+            ],
+            [
+                "Azure B1s VM",
+                "Hosts AgentField control plane (Docker)",
+                "Free tier (12-month)",
+                "₹0",
+                "750 hrs/month B1s — sufficient for POC",
+            ],
+            [
+                "AgentField vector memory",
+                "Semantic search over internal docs (RAG)",
+                "Built-in",
+                "₹0",
+                "Included in AgentField — replaces Azure AI Search",
+            ],
+            [
+                "GitHub Copilot Free",
+                "Dev-time acceleration",
+                "Free tier",
+                "₹0",
+                "Free tier for development",
+            ],
+            [
+                "Pytest + GitHub Actions",
+                "QA test suite + CI",
+                "OSS / free",
+                "₹0",
+                "Industry-standard, zero cost",
+            ],
             ["TOTAL", "", "", "₹2,500", "100% of ceiling — LLM inference is the only cost item"],
         ],
     )
@@ -308,36 +421,116 @@ def build():
     add_heading(doc, "7. Timeline & Effort", level=2)
     add_para(doc, "Development spans Weeks 4–17. Proposal submitted end of Week 2.", italic=True)
 
-    add_para(doc, "Phase 1: Weeks 4–10 — Foundation, Specialist Agents, Mid-Term Checkpoint", bold=True)
+    add_para(
+        doc, "Phase 1: Weeks 4–10 — Foundation, Specialist Agents, Mid-Term Checkpoint", bold=True
+    )
     add_table(
         doc,
         ["Week", "Task", "Deliverable", "QA Activity"],
         [
-            ["Wk 4", "AgentField control plane up via Docker Compose; Azure VM provisioned; OpenRouter connected", "Infra ready", "Smoke tests for control plane + LLM call"],
-            ["Wk 5", "Coordinator Agent — intent classification + routing logic; Pydantic schemas (RoutingDecision, AgentResponse)", "Coordinator routing to named domains", "Unit tests for routing classifier"],
-            ["Wk 6", "Data Platform Agent — Databricks REST API (Jobs, SQL Warehouses)", "Job-run status / history queries working", "Unit + integration tests for Databricks skills"],
-            ["Wk 7", "Docs Agent + RAG index — chunk, embed, store in AgentField vector memory", "Similarity search returning relevant results", "Coverage tests for indexing + retrieval"],
-            ["Wk 8", "DevOps Agent — GitHub Actions / Azure DevOps API", "Build status + deployment + quality gate queries", "Integration tests per skill"],
-            ["Wk 9", "CRM Agent — HubSpot / mock CRM API", "Contact, deal, account queries", "Integration tests"],
-            ["Wk 10", "Week 10 Checkpoint — 4 agents live; routing across all domains; 6 of 12 test queries passing with citations", "Mid-term docs on Moodle", "Unit tests ≥50% coverage"],
+            [
+                "Wk 4",
+                "AgentField control plane up via Docker Compose; Azure VM provisioned; OpenRouter connected",
+                "Infra ready",
+                "Smoke tests for control plane + LLM call",
+            ],
+            [
+                "Wk 5",
+                "Coordinator Agent — intent classification + routing logic; Pydantic schemas (RoutingDecision, AgentResponse)",
+                "Coordinator routing to named domains",
+                "Unit tests for routing classifier",
+            ],
+            [
+                "Wk 6",
+                "Data Platform Agent — Databricks REST API (Jobs, SQL Warehouses)",
+                "Job-run status / history queries working",
+                "Unit + integration tests for Databricks skills",
+            ],
+            [
+                "Wk 7",
+                "Docs Agent + RAG index — chunk, embed, store in AgentField vector memory",
+                "Similarity search returning relevant results",
+                "Coverage tests for indexing + retrieval",
+            ],
+            [
+                "Wk 8",
+                "DevOps Agent — GitHub Actions / Azure DevOps API",
+                "Build status + deployment + quality gate queries",
+                "Integration tests per skill",
+            ],
+            [
+                "Wk 9",
+                "CRM Agent — HubSpot / mock CRM API",
+                "Contact, deal, account queries",
+                "Integration tests",
+            ],
+            [
+                "Wk 10",
+                "Week 10 Checkpoint — 4 agents live; routing across all domains; 6 of 12 test queries passing with citations",
+                "Mid-term docs on Moodle",
+                "Unit tests ≥50% coverage",
+            ],
         ],
     )
 
-    add_para(doc, "Phase 2: Weeks 11–17 — Cross-Domain Synthesis, AI-QA, Deployment, Final Demo", bold=True)
+    add_para(
+        doc,
+        "Phase 2: Weeks 11–17 — Cross-Domain Synthesis, AI-QA, Deployment, Final Demo",
+        bold=True,
+    )
     add_table(
         doc,
         ["Week", "Task", "Deliverable", "QA Activity"],
         [
-            ["Wk 11", "Cross-domain queries — parallel agent dispatch + session memory", "Multi-domain routing working", "Cross-domain E2E tests"],
-            ["Wk 12", "Full test suite — all 12 queries; routing accuracy measured", "Initial hallucination rate documented", "Routing accuracy ≥ target"],
-            ["Wk 13", "Judge Agent (AI QA) — grounding verification reasoner", "Automated hallucination detection per run", "Judge agent validation tests"],
-            ["Wk 14", "Azure deployment — full system on B1s VM end-to-end", "Cloud deployment live", "Deployment smoke + regression"],
-            ["Wk 15", "QA hardening — ≥80% coverage; edge cases; response quality validated", "Coverage targets met", "Full regression suite green"],
-            ["Wk 16", "Demo prep — demo script + evidence pack (routing logs, hallucination rates, test results)", "Demo-ready system + artefacts", "Final regression run"],
-            ["Wk 17", "Week 17 Final Demo — full Psiog Kendra live; all 12 queries passing; hallucination rate documented", "Final submission on Moodle", "Full QA report"],
+            [
+                "Wk 11",
+                "Cross-domain queries — parallel agent dispatch + session memory",
+                "Multi-domain routing working",
+                "Cross-domain E2E tests",
+            ],
+            [
+                "Wk 12",
+                "Full test suite — all 12 queries; routing accuracy measured",
+                "Initial hallucination rate documented",
+                "Routing accuracy ≥ target",
+            ],
+            [
+                "Wk 13",
+                "Judge Agent (AI QA) — grounding verification reasoner",
+                "Automated hallucination detection per run",
+                "Judge agent validation tests",
+            ],
+            [
+                "Wk 14",
+                "Azure deployment — full system on B1s VM end-to-end",
+                "Cloud deployment live",
+                "Deployment smoke + regression",
+            ],
+            [
+                "Wk 15",
+                "QA hardening — ≥80% coverage; edge cases; response quality validated",
+                "Coverage targets met",
+                "Full regression suite green",
+            ],
+            [
+                "Wk 16",
+                "Demo prep — demo script + evidence pack (routing logs, hallucination rates, test results)",
+                "Demo-ready system + artefacts",
+                "Final regression run",
+            ],
+            [
+                "Wk 17",
+                "Week 17 Final Demo — full Psiog Kendra live; all 12 queries passing; hallucination rate documented",
+                "Final submission on Moodle",
+                "Full QA report",
+            ],
         ],
     )
-    add_para(doc, "Total effort: ~150 hours across 14 weeks (~11 hrs/week). QA is embedded each week.", italic=True)
+    add_para(
+        doc,
+        "Total effort: ~150 hours across 14 weeks (~11 hrs/week). QA is embedded each week.",
+        italic=True,
+    )
 
     # ===== 8. Tech Stack =====
     add_heading(doc, "8. Tech Stack", level=2)
@@ -346,10 +539,22 @@ def build():
         ["Layer", "Technologies", "Cost"],
         [
             ["Language", "Python 3.11", "Free"],
-            ["Agent Orchestration", "AgentField (Apache 2.0) — @app.reasoner, @app.skill, app.call", "Free"],
-            ["LLM Inference (primary)", "OpenRouter (model swappable via env var; e.g., google/gemini-2.5-flash)", "₹2,500"],
+            [
+                "Agent Orchestration",
+                "AgentField (Apache 2.0) — @app.reasoner, @app.skill, app.call",
+                "Free",
+            ],
+            [
+                "LLM Inference (primary)",
+                "OpenRouter (model swappable via env var; e.g., google/gemini-2.5-flash)",
+                "₹2,500",
+            ],
             ["LLM Inference (fallback)", "Ollama + Llama 4 Scout (local)", "Free"],
-            ["Vector Memory / Semantic Search", "AgentField built-in (set_vector + similarity_search)", "Free"],
+            [
+                "Vector Memory / Semantic Search",
+                "AgentField built-in (set_vector + similarity_search)",
+                "Free",
+            ],
             ["Data Platform API", "Databricks REST API (Jobs, SQL Warehouses)", "Free tier"],
             ["DevOps APIs", "GitHub Actions API / Azure DevOps REST API", "Free tier"],
             ["CRM API", "HubSpot Free CRM or mock REST service", "Free"],
@@ -394,10 +599,26 @@ def build():
             ["6", "Who is the account owner for TechStart Ltd?", "CRM"],
             ["7", "What is the runbook for a schema mismatch error?", "Docs"],
             ["8", "What does the architecture doc say about the ingestion pipeline?", "Docs"],
-            ["9", "Did last night's pipeline failure affect any CRM customer sync?", "Data Platform + CRM"],
-            ["10", "The ingestion job failed — is there a fix in the runbooks?", "Data Platform + Docs"],
-            ["11", "What's the status of the latest deployment and are there known issues?", "DevOps + Docs"],
-            ["12", "Give me a full status update — pipeline, deployments, and any open incidents", "All 4 domains"],
+            [
+                "9",
+                "Did last night's pipeline failure affect any CRM customer sync?",
+                "Data Platform + CRM",
+            ],
+            [
+                "10",
+                "The ingestion job failed — is there a fix in the runbooks?",
+                "Data Platform + Docs",
+            ],
+            [
+                "11",
+                "What's the status of the latest deployment and are there known issues?",
+                "DevOps + Docs",
+            ],
+            [
+                "12",
+                "Give me a full status update — pipeline, deployments, and any open incidents",
+                "All 4 domains",
+            ],
         ],
     )
 
@@ -423,11 +644,36 @@ def build():
         doc,
         ["Layer", "What We Test", "How", "Target"],
         [
-            ["Unit", "Each @app.skill() function in isolation", "Pytest with mocked API responses", "≥80% code coverage"],
-            ["Integration", "Each specialist agent end-to-end (query → cited response)", "Pytest hitting live AgentField control plane", "All 4 agents covered"],
-            ["Routing", "Coordinator routes each of the 12 test queries correctly", "Automated routing-accuracy suite (actual vs expected)", "100% on 12 queries"],
-            ["E2E", "Full query lifecycle from user input to final cited response", "curl / test harness against deployed system", "12 of 12 passing"],
-            ["Data Validation", "All doc chunks have valid metadata; no orphan chunks; relevant retrieval", "Indexing audit + ≥5 representative similarity queries", "Zero invalid chunks"],
+            [
+                "Unit",
+                "Each @app.skill() function in isolation",
+                "Pytest with mocked API responses",
+                "≥80% code coverage",
+            ],
+            [
+                "Integration",
+                "Each specialist agent end-to-end (query → cited response)",
+                "Pytest hitting live AgentField control plane",
+                "All 4 agents covered",
+            ],
+            [
+                "Routing",
+                "Coordinator routes each of the 12 test queries correctly",
+                "Automated routing-accuracy suite (actual vs expected)",
+                "100% on 12 queries",
+            ],
+            [
+                "E2E",
+                "Full query lifecycle from user input to final cited response",
+                "curl / test harness against deployed system",
+                "12 of 12 passing",
+            ],
+            [
+                "Data Validation",
+                "All doc chunks have valid metadata; no orphan chunks; relevant retrieval",
+                "Indexing audit + ≥5 representative similarity queries",
+                "Zero invalid chunks",
+            ],
             ["Regression", "Full suite on every push", "GitHub Actions CI", "100% pass on merge"],
         ],
     )
@@ -440,7 +686,9 @@ def build():
         "each claim against it, and flags any claim that cannot be grounded.",
     )
     p = doc.add_paragraph()
-    r = p.add_run("Hallucination Rate = (Ungrounded claims / Total claims) × 100   ·   measured across all 12 test queries")
+    r = p.add_run(
+        "Hallucination Rate = (Ungrounded claims / Total claims) × 100   ·   measured across all 12 test queries"
+    )
     r.font.name = "Consolas"
     r.font.size = Pt(10)
 
@@ -469,13 +717,55 @@ def build():
         doc,
         ["#", "Risk", "Impact", "Mitigation", "Fallback"],
         [
-            ["1", "OpenRouter spend approaches ₹2,500 before Week 17", "Could exceed fixed budget", "Daily token usage tracking; cap per-query token budget; cache LLM responses for repeat test runs", "Switch primary LLM to Ollama + Llama 4 Scout (local, ₹0) via env-var change"],
-            ["2", "External LLM exposure of sensitive data in production", "Privacy / compliance risk", "Use only mock/synthetic data in capstone demo; document three production mitigations (Ollama-local, Azure OpenAI Private Endpoint, Data Minimisation)", "For production: layered approach — Data Minimisation + Azure OpenAI Private Link + Ollama high-sensitivity fallback"],
-            ["3", "Hallucination rate above 10% target", "Reduces trust / fails QA target", "Force every specialist to return citations; Judge Agent verifies grounding; tighten system prompts to ground-or-refuse", "Constrain answer template to citation-bound fields only; refuse if no citation found"],
-            ["4", "Routing accuracy below 100% on 12 queries", "Coordinator sends queries to wrong specialist", "Few-shot routing examples in system prompt; Pydantic-validated RoutingDecision; routing-accuracy CI gate", "Add a confirmation step for ambiguous queries; fall back to broadcast-and-merge"],
-            ["5", "Databricks / HubSpot free-tier API limits", "Specialist agents may fail in demo", "Cache results during demo; back off on rate limits; pre-warm common queries", "Replace with realistic mock APIs returning recorded fixtures"],
-            ["6", "Azure B1s VM free-tier hours exhausted", "Hosting could incur cost", "CloudWatch-style usage check; stop VM outside dev hours", "Move to local Docker Compose for the demo; redeploy fresh free-tier VM"],
-            ["7", "AgentField vector retrieval returns irrelevant chunks", "Docs Agent gives incorrect citations", "Tune chunk size; metadata-filtered search; evaluate top_k empirically across 5 sample queries", "Add lightweight BM25 re-ranker over top_k results"],
+            [
+                "1",
+                "OpenRouter spend approaches ₹2,500 before Week 17",
+                "Could exceed fixed budget",
+                "Daily token usage tracking; cap per-query token budget; cache LLM responses for repeat test runs",
+                "Switch primary LLM to Ollama + Llama 4 Scout (local, ₹0) via env-var change",
+            ],
+            [
+                "2",
+                "External LLM exposure of sensitive data in production",
+                "Privacy / compliance risk",
+                "Use only mock/synthetic data in capstone demo; document three production mitigations (Ollama-local, Azure OpenAI Private Endpoint, Data Minimisation)",
+                "For production: layered approach — Data Minimisation + Azure OpenAI Private Link + Ollama high-sensitivity fallback",
+            ],
+            [
+                "3",
+                "Hallucination rate above 10% target",
+                "Reduces trust / fails QA target",
+                "Force every specialist to return citations; Judge Agent verifies grounding; tighten system prompts to ground-or-refuse",
+                "Constrain answer template to citation-bound fields only; refuse if no citation found",
+            ],
+            [
+                "4",
+                "Routing accuracy below 100% on 12 queries",
+                "Coordinator sends queries to wrong specialist",
+                "Few-shot routing examples in system prompt; Pydantic-validated RoutingDecision; routing-accuracy CI gate",
+                "Add a confirmation step for ambiguous queries; fall back to broadcast-and-merge",
+            ],
+            [
+                "5",
+                "Databricks / HubSpot free-tier API limits",
+                "Specialist agents may fail in demo",
+                "Cache results during demo; back off on rate limits; pre-warm common queries",
+                "Replace with realistic mock APIs returning recorded fixtures",
+            ],
+            [
+                "6",
+                "Azure B1s VM free-tier hours exhausted",
+                "Hosting could incur cost",
+                "CloudWatch-style usage check; stop VM outside dev hours",
+                "Move to local Docker Compose for the demo; redeploy fresh free-tier VM",
+            ],
+            [
+                "7",
+                "AgentField vector retrieval returns irrelevant chunks",
+                "Docs Agent gives incorrect citations",
+                "Tune chunk size; metadata-filtered search; evaluate top_k empirically across 5 sample queries",
+                "Add lightweight BM25 re-ranker over top_k results",
+            ],
         ],
     )
 
@@ -501,12 +791,36 @@ def build():
         doc,
         ["Criterion", "Psiog Kendra's Approach", "Weight"],
         [
-            ["Problem Understanding", "Addresses fragmentation, tribal knowledge, and hallucination risk — not a paraphrase of the RFP", "15%"],
-            ["Solution Quality", "5-agent architecture (1 Coordinator + 4 Specialists), clear routing flow, structured cited responses", "20%"],
-            ["AI Integration Depth", "LLM for routing, LLM per agent, embeddings for semantic search, LLM Judge for QA — AI at every layer", "20%"],
-            ["QA Strategy", "12 test queries, routing accuracy, hallucination rate, Judge Agent, ≥80% coverage", "15%"],
-            ["Budget & Cost Justification", "₹2,500 of ₹2,500 — all non-LLM on free tiers; Ollama ₹0 fallback retained", "15%"],
-            ["Timeline Feasibility", "Week-by-week milestones; Week 10 + Week 17 checkpoints with concrete deliverables", "15%"],
+            [
+                "Problem Understanding",
+                "Addresses fragmentation, tribal knowledge, and hallucination risk — not a paraphrase of the RFP",
+                "15%",
+            ],
+            [
+                "Solution Quality",
+                "5-agent architecture (1 Coordinator + 4 Specialists), clear routing flow, structured cited responses",
+                "20%",
+            ],
+            [
+                "AI Integration Depth",
+                "LLM for routing, LLM per agent, embeddings for semantic search, LLM Judge for QA — AI at every layer",
+                "20%",
+            ],
+            [
+                "QA Strategy",
+                "12 test queries, routing accuracy, hallucination rate, Judge Agent, ≥80% coverage",
+                "15%",
+            ],
+            [
+                "Budget & Cost Justification",
+                "₹2,500 of ₹2,500 — all non-LLM on free tiers; Ollama ₹0 fallback retained",
+                "15%",
+            ],
+            [
+                "Timeline Feasibility",
+                "Week-by-week milestones; Week 10 + Week 17 checkpoints with concrete deliverables",
+                "15%",
+            ],
         ],
     )
 

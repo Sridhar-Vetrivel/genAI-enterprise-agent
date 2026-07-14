@@ -67,19 +67,24 @@ async def _serving(host: str, port: int, timeout: float) -> bool:
 async def _registered(timeout: float) -> set[str]:
     """The node ids the control plane will actually route to.
 
+    Asks the discovery endpoint, not `/api/v1/nodes`. `/nodes` lists only nodes whose
+    health_status is "active", and a node that registered while its port was still binding
+    is stuck at "unknown" -- while the control plane routes to it quite happily. Judging by
+    /nodes marked four working agents as broken.
+
     An unreachable control plane returns an empty set, so every node reads UNREGISTERED --
     which is the truth: nothing can be routed anywhere.
     """
     cfg = settings()
-    url = f"{cfg.agentfield_server.rstrip('/')}{cfg.agentfield_nodes_path}"
+    url = f"{cfg.agentfield_server.rstrip('/')}{cfg.agentfield_discovery_path}"
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.get(url)
             resp.raise_for_status()
-            nodes = resp.json().get("nodes") or []
+            found = resp.json().get("capabilities") or []
     except (httpx.HTTPError, ValueError):
         return set()
-    return {n["id"] for n in nodes if "id" in n}
+    return {c["agent_id"] for c in found if "agent_id" in c}
 
 
 async def check(host: str = "127.0.0.1", timeout: float = 5.0) -> list[NodeHealth]:

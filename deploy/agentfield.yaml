@@ -1,0 +1,31 @@
+# AgentField control-plane configuration.
+#
+# The stock control plane kills an execution after 90 seconds. That is generous for a hosted
+# model and hopeless here: OpenRouter is not provisioned, so every LLM call runs on a local
+# CPU with no GPU and takes 30-90 seconds on its own. `coordinator.ask` is three of them back
+# to back -- classify the intent, ask the specialist, synthesise the answer -- and the
+# cross-domain queries fan out to as many as four specialists. Every one was killed
+# mid-flight with "execution timeout after 1m30s".
+#
+# These numbers come straight back down once OpenRouter is provisioned and an LLM call stops
+# taking a minute and a half. They are a symptom of CPU inference, not a design choice.
+#
+# Keys are nested exactly as the AgentField server expects (agentfield.execution_queue.*).
+# A key at the wrong nesting is silently ignored -- it does not warn, it just does nothing,
+# so verify any change here against a query that actually takes longer than 90 seconds.
+
+agentfield:
+  # The ceiling on one whole execution (a `coordinator.ask` end to end).
+  request_timeout: 1200s
+
+  execution_queue:
+    request_timeout: 1200s
+    # The ceiling on one agent-to-agent call: the coordinator's `app.call()` into a
+    # specialist. A cross-domain query makes up to four of these.
+    agent_call_timeout: 1200s
+    # Must exceed agent_call_timeout, or the queue reclaims the job while it is still
+    # legitimately running and the work is done twice.
+    lease_duration: 1500s
+    # A slow answer is not a flaky answer. Retrying a 15-minute inference three times helps
+    # nobody and takes 45 minutes to fail.
+    max_attempts: 1

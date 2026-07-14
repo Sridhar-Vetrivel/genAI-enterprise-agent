@@ -1,0 +1,19 @@
+{
+  "traces": [
+    {
+      "id": 1,
+      "query": "Did yesterday's ETL pipeline for the sales data run successfully?",
+      "expected_domains": [
+        "data-platform"
+      ],
+      "status": "unknown",
+      "execution_id": "",
+      "run_id": "",
+      "error": "execution timeout after 1m30s",
+      "domains": [],
+      "answer": "",
+      "citations": [],
+      "seconds": 90.5
+    }
+  ]
+}

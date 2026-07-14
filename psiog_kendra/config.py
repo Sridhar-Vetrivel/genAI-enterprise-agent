@@ -75,6 +75,11 @@ class Settings:
     agentfield_server: str = field(
         default_factory=lambda: _env("AGENTFIELD_SERVER", "http://localhost:8080")
     )
+    # Where the control plane lists the nodes it will actually route to. A node can be
+    # serving happily on its port and still be absent here -- see `agents.health`.
+    agentfield_nodes_path: str = field(
+        default_factory=lambda: _env("AGENTFIELD_NODES_PATH", "/api/v1/nodes")
+    )
     agentfield_execute_path: str = field(
         default_factory=lambda: _env("AGENTFIELD_EXECUTE_PATH", "/api/v1/execute")
     )

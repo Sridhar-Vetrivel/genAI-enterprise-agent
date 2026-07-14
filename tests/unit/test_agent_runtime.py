@@ -9,8 +9,11 @@ plane. The control plane listed five healthy nodes; four of them were dead, and 
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
+from agents import health
 from agents._runtime import serve
 from psiog_kendra.config import reset_settings, settings
 
@@ -109,3 +112,71 @@ class TestServe:
         with pytest.raises(SystemExit, match="no port configured"):
             serve(app)  # type: ignore[arg-type]
         assert app.served_on is None
+
+
+class TestFleetHealth:
+    """A node is usable only if it is BOTH serving and routable, and each half has failed
+    on its own. Checking one and trusting the other is how both bugs hid."""
+
+    @staticmethod
+    def _fleet(monkeypatch: pytest.MonkeyPatch, serving: set[str], registered: set[str]) -> None:
+        ports = settings().node_to_port
+        by_port = {port: node for node, port in ports.items()}
+
+        async def fake_serving(host: str, port: int, timeout: float) -> bool:
+            return by_port[port] in serving
+
+        async def fake_registered(timeout: float) -> set[str]:
+            return registered
+
+        monkeypatch.setattr(health, "_serving", fake_serving)
+        monkeypatch.setattr(health, "_registered", fake_registered)
+
+    def test_a_healthy_fleet_is_reported_healthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        nodes = set(settings().node_to_port)
+        self._fleet(monkeypatch, serving=nodes, registered=nodes)
+        assert all(n.ok for n in asyncio.run(health.check()))
+        assert health.main() == 0
+
+    def test_a_serving_but_evicted_node_is_not_called_healthy(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # THE data-agent BUG. Its process was alive and its port answered, but the control
+        # plane had evicted it after a long inference and would route it nothing. A
+        # port-only check called this "up" -- the failure that hides in plain sight.
+        nodes = set(settings().node_to_port)
+        evicted = settings().node_data
+        self._fleet(monkeypatch, serving=nodes, registered=nodes - {evicted})
+
+        fleet = {n.node_id: n for n in asyncio.run(health.check())}
+        assert fleet[evicted].serving is True
+        assert fleet[evicted].routable is False
+        assert fleet[evicted].ok is False
+        assert fleet[evicted].status == "UNREGISTERED"
+        assert health.main() == 1  # must not exit 0
+
+    def test_a_registered_but_dead_node_is_not_called_healthy(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The port-collision bug: registered with the control plane, then died on bind.
+        nodes = set(settings().node_to_port)
+        dead = settings().node_devops
+        self._fleet(monkeypatch, serving=nodes - {dead}, registered=nodes)
+
+        fleet = {n.node_id: n for n in asyncio.run(health.check())}
+        assert fleet[dead].status == "DEAD"
+        assert health.main() == 1
+
+    def test_an_unreachable_control_plane_fails_rather_than_passing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # If the control plane is down, nothing is routable -- that must be a failure, not
+        # a pass just because the ports happen to answer.
+        nodes = set(settings().node_to_port)
+        self._fleet(monkeypatch, serving=nodes, registered=set())
+        assert health.main() == 1
+
+    def test_every_broken_status_has_a_remedy(self) -> None:
+        # A failure the operator cannot act on is only half a check.
+        for status in ("UNREGISTERED", "DEAD", "DOWN"):
+            assert health._REMEDY[status]

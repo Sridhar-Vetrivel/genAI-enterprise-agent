@@ -1,24 +1,60 @@
-"""Is the fleet actually up?
+"""Is the fleet actually usable?
 
-    python -m agents.health
+    python -m agents.health      (or: make agents-status)
 
-`make agents` backgrounds five nodes and returns immediately, so a node that dies on
-startup is invisible: the shell prints no error and the control plane still lists the node,
-because registration happens *before* the server binds its socket. That is exactly how four
-of five nodes sat dead behind a healthy-looking fleet.
+A node is only usable if BOTH halves hold, and each half has failed on its own here:
 
-This asks each node's own port whether anything is listening, and exits non-zero if not.
+* **Serving** -- something is listening on the node's port. `make agents` backgrounds five
+  nodes and returns immediately, so a node that dies on startup is otherwise invisible. Four
+  of five once sat dead behind a control plane that cheerfully listed all five, because
+  AgentField registers *before* it binds the socket.
+
+* **Routable** -- the control plane still lists the node. `data-agent` was evicted from the
+  registry after an 82-second inference (its heartbeat stopped and never resumed) while its
+  process stayed alive and its port kept answering. Port-only health called it "up"; the
+  control plane would not route a single call to it.
+
+Checking one half and trusting the other is how both bugs hid. This checks both.
 """
 
 from __future__ import annotations
 
 import asyncio
 import sys
+from dataclasses import dataclass
+
+import httpx
 
 from psiog_kendra.config import settings
 
 
-async def _listening(host: str, port: int, timeout: float) -> bool:
+@dataclass(frozen=True)
+class NodeHealth:
+    """What the two independent checks say about one node."""
+
+    node_id: str
+    port: int
+    serving: bool  # something is listening on the port
+    routable: bool  # the control plane will route to it
+
+    @property
+    def ok(self) -> bool:
+        return self.serving and self.routable
+
+    @property
+    def status(self) -> str:
+        if self.ok:
+            return "up"
+        if self.serving and not self.routable:
+            # The dangerous one: looks alive from the outside, gets no traffic.
+            return "UNREGISTERED"
+        if self.routable and not self.serving:
+            # The other dangerous one: listed by the control plane, but dead.
+            return "DEAD"
+        return "DOWN"
+
+
+async def _serving(host: str, port: int, timeout: float) -> bool:
     """True if something accepts a TCP connection on the port."""
     try:
         _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
@@ -28,31 +64,64 @@ async def _listening(host: str, port: int, timeout: float) -> bool:
     return True
 
 
-async def check(host: str = "127.0.0.1", timeout: float = 2.0) -> dict[str, bool]:
-    """Node id -> whether it is serving."""
+async def _registered(timeout: float) -> set[str]:
+    """The node ids the control plane will actually route to.
+
+    An unreachable control plane returns an empty set, so every node reads UNREGISTERED --
+    which is the truth: nothing can be routed anywhere.
+    """
+    cfg = settings()
+    url = f"{cfg.agentfield_server.rstrip('/')}{cfg.agentfield_nodes_path}"
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            nodes = resp.json().get("nodes") or []
+    except (httpx.HTTPError, ValueError):
+        return set()
+    return {n["id"] for n in nodes if "id" in n}
+
+
+async def check(host: str = "127.0.0.1", timeout: float = 5.0) -> list[NodeHealth]:
+    """Both halves, for every node, concurrently."""
     ports = settings().node_to_port
-    alive = await asyncio.gather(*(_listening(host, p, timeout) for p in ports.values()))
-    return dict(zip(ports, alive, strict=True))
+    serving, registered = await asyncio.gather(
+        asyncio.gather(*(_serving(host, p, timeout) for p in ports.values())),
+        _registered(timeout),
+    )
+    return [
+        NodeHealth(node_id=node, port=port, serving=is_serving, routable=node in registered)
+        for (node, port), is_serving in zip(ports.items(), serving, strict=True)
+    ]
+
+
+_REMEDY = {
+    "UNREGISTERED": (
+        "serving, but the control plane will not route to it. Its heartbeat stopped (this "
+        "has happened after a long inference) or the control plane restarted under it. "
+        "Restart the node, and check `make up` is running."
+    ),
+    "DEAD": (
+        "listed by the control plane but nothing is on its port -- it registered and then "
+        "died. Check data/agents/*.log."
+    ),
+    "DOWN": "not running at all. Start it with `make agents`; check data/agents/*.log.",
+}
 
 
 def main() -> int:
-    health = asyncio.run(check())
-    ports = settings().node_to_port
-    for node, up in sorted(health.items()):
-        mark = "up  " if up else "DOWN"
-        print(f"  [{mark}] {node:<14} :{ports[node]}")
+    fleet = asyncio.run(check())
+    for node in sorted(fleet, key=lambda n: n.node_id):
+        print(f"  [{node.status:^12}] {node.node_id:<14} :{node.port}")
 
-    dead = [node for node, up in health.items() if not up]
-    if dead:
-        print(
-            f"\n{len(dead)} of {len(health)} nodes are not serving: {', '.join(sorted(dead))}\n"
-            f"Check data/agents/*.log. A node can register with the control plane and still "
-            f"be dead -- registration happens before the socket is bound.",
-            file=sys.stderr,
-        )
+    broken = [n for n in fleet if not n.ok]
+    if broken:
+        print(f"\n{len(broken)} of {len(fleet)} nodes are not usable:", file=sys.stderr)
+        for node in sorted(broken, key=lambda n: n.node_id):
+            print(f"  {node.node_id}: {_REMEDY[node.status]}", file=sys.stderr)
         return 1
 
-    print(f"\nall {len(health)} nodes serving")
+    print(f"\nall {len(fleet)} nodes serving and routable")
     return 0
 
 

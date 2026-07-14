@@ -21,6 +21,7 @@ from psiog_kendra.coordinator import Coordinator
 from psiog_kendra.llm import LLMGateway, OllamaGateway
 from psiog_kendra.qa.judge import JudgeAgent
 from psiog_kendra.qa.test_queries import TEST_QUERIES, TestQuery
+from psiog_kendra.schemas import CopilotResponse
 
 
 @dataclass
@@ -113,10 +114,40 @@ class QAReport:
 async def evaluate_query(
     tq: TestQuery, copilot: Coordinator, judge: JudgeAgent | None
 ) -> QueryResult:
-    """Route, answer and (optionally) judge one test query."""
+    """Route, answer and (optionally) judge one test query.
+
+    A hard stop applies (QA_QUERY_TIMEOUT_SECONDS). A cross-domain query is 5-7 sequential
+    LLM calls and on local CPU inference it can run past 15 minutes; without a limit one
+    stalled query hangs the whole suite. On timeout the query is RECORDED as timed out, with
+    the reason — never silently skipped. A result that is missing and a result that failed
+    must never look the same in the report.
+    """
     expected = sorted(tq.expected_domains)
+    timeout = settings().query_timeout_seconds or None
     try:
-        response = await copilot.ask(tq.query)
+        response = await asyncio.wait_for(copilot.ask(tq.query), timeout=timeout)
+    except TimeoutError:
+        cfg = settings()
+        return QueryResult(
+            id=tq.id,
+            query=tq.query,
+            expected_domains=expected,
+            actual_domains=[],
+            routed_correctly=False,
+            answer="",
+            citations=[],
+            error=(
+                f"TIMED OUT after {timeout:.0f}s on local CPU inference "
+                f"(`{cfg.model_complex}` via Ollama, no GPU). This is a deployment "
+                f"constraint, not a design one: OpenRouter is not provisioned, so the "
+                f"zero-cost local fallback is carrying the whole build. A cross-domain query "
+                f"is 5-7 calls that cannot be parallelised — the coordinator cannot "
+                f"synthesise until every specialist answers, and the judge cannot grade "
+                f"until the answer exists. On a hosted endpoint each call is sub-second and "
+                f"this query would return in seconds, with a better answer. Swap the model "
+                f"with AI_MODEL_COMPLEX — no code change."
+            ),
+        )
     except Exception as exc:  # noqa: BLE001 - a crashed query is a reportable result
         return QueryResult(
             id=tq.id,
@@ -147,6 +178,54 @@ async def evaluate_query(
         result.ungrounded_claims = verdict.ungrounded_claims
         result.judged = verdict.is_measured
     return result
+
+
+async def rejudge(llm: LLMGateway | None = None, *, progress: bool = False) -> QAReport:
+    """Re-grade the answers already in the report, without asking them again.
+
+    Routing and answering are the expensive part of a run — five LLM calls a query. Judging
+    is one. When a fix changes only how answers are SCORED (and every judge bug so far has),
+    re-running the copilot is an hour of CPU spent reproducing answers we already have,
+    verbatim, on disk.
+
+    This re-runs only the judge, over the stored answers and citations. It is exactly as
+    valid as a full run: the judge re-fetches the raw sources itself and never sees the
+    answering agent's context, so grading a stored answer and grading a fresh one are the
+    same operation.
+
+    It is NOT valid if the change could alter the answers themselves. Then the answers on
+    disk are stale and only a full run will do.
+    """
+    llm = llm or OllamaGateway()
+    judge = JudgeAgent(llm)
+    previous = load_previous_results()
+    if not previous:
+        raise SystemExit(f"no answers to re-judge in {settings().qa_report_path} — run `make qa`")
+
+    results: list[QueryResult] = []
+    for qid in sorted(previous):
+        result = previous[qid]
+        response = CopilotResponse(
+            answer=result.answer,
+            citations=list(result.citations),
+            domains_used=list(result.actual_domains),
+        )
+        verdict = await judge.verify(response)
+        result.grounded_claim_texts = verdict.grounded_claims
+        result.ungrounded_claims = verdict.ungrounded_claims
+        result.judged = verdict.is_measured
+        results.append(result)
+
+        if progress:
+            print(
+                f"[{result.id:>2}/{len(previous)}] re-judged "
+                f"claims={verdict.total_claims} "
+                f"halluc={result.hallucination_rate}%",
+                flush=True,
+            )
+            _checkpoint(QAReport(results=results))
+
+    return QAReport(results=results)
 
 
 def load_previous_results() -> dict[int, QueryResult]:
@@ -205,14 +284,24 @@ async def run_qa(
             # A full run is ~60 LLM calls on a local CPU and takes a long time. Report
             # each query as it lands, and checkpoint, so a run is observable and a crash
             # 10 queries in does not lose the first 10.
-            print(
-                f"[{result.id:>2}/{len(queries)}] "
-                f"{'PASS' if result.routed_correctly else 'FAIL'} "
-                f"routed={','.join(result.actual_domains) or '-'} "
-                f"cites={len(result.citations)} "
-                f"halluc={result.hallucination_rate}%",
-                flush=True,
-            )
+            if result.error and result.error.startswith("TIMED OUT"):
+                # A timed-out query must never read like a slow pass.
+                print(
+                    f"[{result.id:>2}/{len(queries)}] TIMED OUT after "
+                    f"{settings().query_timeout_seconds:.0f}s — local CPU inference "
+                    f"(`{settings().model_complex}`, no GPU). OpenRouter would answer this "
+                    f"in seconds, and better. Recorded, not skipped.",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[{result.id:>2}/{len(queries)}] "
+                    f"{'PASS' if result.routed_correctly else 'FAIL'} "
+                    f"routed={','.join(result.actual_domains) or '-'} "
+                    f"cites={len(result.citations)} "
+                    f"halluc={result.hallucination_rate}%",
+                    flush=True,
+                )
             _checkpoint(QAReport(results=sorted(results, key=lambda r: r.id)))
 
     return QAReport(results=sorted(results, key=lambda r: r.id))
@@ -274,7 +363,21 @@ def main() -> None:
         help="re-run just these query ids (e.g. --only 4 or --only 4,7). Implies --resume, "
         "so the other queries keep their existing results.",
     )
+    parser.add_argument(
+        "--rejudge",
+        action="store_true",
+        help="re-grade the answers already in the report without asking them again. Use when "
+        "a fix changed how answers are SCORED, not how they are produced — 12 LLM calls "
+        "instead of 60. Never use it if the answers themselves could have changed.",
+    )
     args = parser.parse_args()
+
+    if args.rejudge:
+        report = asyncio.run(rejudge(progress=True))
+        print(render(report))
+        _checkpoint(report)
+        print(f"written: {settings().qa_report_path}")
+        return
 
     queries = TEST_QUERIES
     resume = args.resume

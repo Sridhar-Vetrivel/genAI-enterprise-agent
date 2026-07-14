@@ -229,3 +229,6 @@ __marimo__/
 # Generated artefacts — rebuild with `make index` / `make qa` / `make evidence`
 data/index/
 data/qa_report.json
+
+# Per-node stdout from `make agents`
+data/agents/

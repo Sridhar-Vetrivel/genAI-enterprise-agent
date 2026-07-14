@@ -12,7 +12,12 @@ from datetime import date
 
 import pytest
 
-from psiog_kendra.prompting import build_grounded_prompt, clean_answer, finalize
+from psiog_kendra.prompting import (
+    build_grounded_prompt,
+    clean_answer,
+    finalize,
+    finalize_synthesis,
+)
 
 ALLOWED = [
     "Databricks Job #4822 (ingestion_raw_events) run #99150",
@@ -81,6 +86,23 @@ class TestBuildGroundedPrompt:
             question="q", facts_label="F:", facts="f", citations=["c"], today=date(2026, 7, 13)
         )
         assert "timestamp actually matches the question" in prompt
+
+    def test_says_the_date_anchor_is_not_a_fact_to_repeat(self) -> None:
+        # The anchor fixes one bug and caused another. On QA query 11 the answer ended
+        # "...as of 2026-07-14" — today's date, laundered out of this prompt and into a claim.
+        # It appears in no source, so the deterministic fact check correctly called it a
+        # hallucination. The anchor must say, in as many words, that it is not a fact.
+        prompt = build_grounded_prompt(
+            question="q", facts_label="F:", facts="f", citations=["c"], today=date(2026, 7, 14)
+        )
+        assert "NOT a fact" in prompt
+        assert "never state it" in prompt
+
+    def test_tells_the_model_every_number_must_come_from_the_records(self) -> None:
+        prompt = build_grounded_prompt(
+            question="q", facts_label="F:", facts="f", citations=["c"], today=date(2026, 7, 14)
+        )
+        assert "must appear in the records above" in prompt
 
 
 class TestCleanAnswer:
@@ -306,3 +328,371 @@ class TestFinalize:
         assert "Citation strings" not in answer
         assert ALLOWED[0] not in answer
         assert citations == [ALLOWED[0]]
+
+
+class TestFinalizeSynthesis:
+    """Cross-domain synthesis. None of this can happen in a single-domain answer — those
+    bypass synthesis entirely — which is why it only surfaced on QA query 9."""
+
+    SUPPLIED = [
+        "Databricks Job #4830 (crm_sync) run #99163",
+        "Databricks Job #4822 (ingestion_raw_events) run #99150",
+        "CRM account ACC-1001 (Acme Corp)",
+        "CRM account ACC-1002 (TechStart Ltd)",
+        "CRM account ACC-1003 (Northwind Retail)",
+    ]
+
+    def test_the_specialists_name_tags_are_stripped_from_the_prose(self) -> None:
+        # The coordinator labelled each report "[data-agent] ..." and gemma3 copied the tags
+        # straight into the answer. A bracketed tag is an invitation to copy.
+        answer, _ = finalize_synthesis(
+            "Zero rows were synced to CRM [data-agent]. Three accounts were affected [crm-agent].",
+            [],
+            self.SUPPLIED,
+        )
+        assert "[data-agent]" not in answer
+        assert "[crm-agent]" not in answer
+        assert answer == "Zero rows were synced to CRM. Three accounts were affected."
+
+    def test_a_source_the_answer_names_is_cited_even_if_the_model_forgot_it(self) -> None:
+        # The real failure: the answer named ACC-1001, ACC-1002 and ACC-1003 and cited only
+        # ACC-1001, leaving two-thirds of its claims uncited.
+        answer = (
+            "The crm_sync job (run #99163) failed, so accounts ACC-1001 (Acme Corp), "
+            "ACC-1002 (TechStart Ltd) and ACC-1003 (Northwind Retail) were affected."
+        )
+        _, citations = finalize_synthesis(
+            answer, ["CRM account ACC-1001 (Acme Corp)"], self.SUPPLIED
+        )
+        assert "CRM account ACC-1002 (TechStart Ltd)" in citations
+        assert "CRM account ACC-1003 (Northwind Retail)" in citations
+        assert "Databricks Job #4830 (crm_sync) run #99163" in citations
+
+    def test_a_source_the_answer_never_touches_is_not_cited(self) -> None:
+        # The bias is towards keeping, but not blindly: a specialist source that appears
+        # nowhere in the synthesis and that the model never named is left out.
+        answer = "Only account ACC-1001 (Acme Corp) was affected."
+        _, citations = finalize_synthesis(answer, [], self.SUPPLIED)
+        assert citations == ["CRM account ACC-1001 (Acme Corp)"]
+
+    def test_a_citation_with_nothing_identifiable_is_always_kept(self) -> None:
+        # A doc section carries no id, so it cannot be checked this way. Absence of evidence
+        # is not evidence of absence — it stays.
+        docs = ["runbook-12-schema-mismatch.md § Cause"]
+        _, citations = finalize_synthesis("Re-run the job without loosening the type.", [], docs)
+        assert citations == docs
+
+    def test_scaffolding_leaks_are_still_stripped(self) -> None:
+        answer, _ = finalize_synthesis(
+            "The job failed. Citation strings you may use: blah", [], self.SUPPLIED
+        )
+        assert "Citation strings" not in answer
+
+    def test_nothing_established_falls_back_to_every_specialist_source(self) -> None:
+        # Better to over-cite the specialists that were actually dispatched than to serve a
+        # cross-domain answer with no provenance at all.
+        _, citations = finalize_synthesis("Several systems were affected.", [], self.SUPPLIED)
+        assert citations == self.SUPPLIED
+
+    def test_no_supplied_sources_yields_no_citations(self) -> None:
+        answer, citations = finalize_synthesis("An answer.", ["invented"], [])
+        assert citations == []
+        assert answer == "An answer."
+
+
+class TestNamedRecordsAreCited:
+    """A record the answer NAMES is a record the answer used, whether or not the model
+    remembered to cite it. finalize() only ever DROPPED a contradicted citation; it had no
+    way to ADD one the answer plainly relied on, and CRM citations carry no '#id' so the
+    whole corroboration path skipped them."""
+
+    CRM = [
+        "CRM account ACC-1001 (Acme Corp)",
+        "CRM account ACC-1002 (TechStart Ltd)",
+        "CRM account ACC-1003 (Northwind Retail)",
+    ]
+
+    def test_the_specialist_cites_every_account_its_answer_names(self) -> None:
+        # The real failure: the CRM agent wrote about all three accounts and returned one
+        # citation, leaving two-thirds of its own answer uncited — and the coordinator
+        # cannot cite what the specialist never handed it.
+        answer = (
+            "Accounts ACC-1001 (Acme Corp), ACC-1002 (TechStart Ltd) and "
+            "ACC-1003 (Northwind Retail) are all stale."
+        )
+        _, citations = finalize(answer, ["CRM account ACC-1001 (Acme Corp)"], self.CRM)
+        assert citations == self.CRM
+
+    def test_an_account_the_answer_never_names_is_not_cited(self) -> None:
+        answer = "Only ACC-1001 (Acme Corp) is stale."
+        _, citations = finalize(answer, [], self.CRM)
+        assert citations == ["CRM account ACC-1001 (Acme Corp)"]
+
+    def test_naming_a_record_cannot_invent_a_source(self) -> None:
+        # _named_in only ever selects from `allowed`, so an id in the prose that belongs to
+        # no supplied source adds nothing.
+        _, citations = finalize("Account ACC-9999 is stale.", [], self.CRM)
+        assert citations == ["CRM account ACC-1001 (Acme Corp)"]  # positional fallback only
+
+    def test_a_contradicted_citation_is_still_dropped(self) -> None:
+        # Adding named records must not resurrect the mismatched-citation bug: an answer
+        # about job #4822 must never be served citing job #4830.
+        answer, citations = finalize(
+            "The failure was in job #4822 (ingestion_raw_events) run #99150.", [ALLOWED[1]], ALLOWED
+        )
+        assert citations == [ALLOWED[0]]
+
+
+class TestSynthesisInlineCitations:
+    SUPPLIED = [
+        "Databricks Job #4830 (crm_sync) run #99163",
+        "CRM account ACC-1001 (Acme Corp)",
+        "CRM account ACC-1002 (TechStart Ltd)",
+    ]
+
+    def test_a_citation_written_into_the_prose_is_lifted_out(self) -> None:
+        # With the [data-agent] tags gone the model simply moved the leak: it started
+        # writing the citation STRINGS into the sentence instead.
+        answer, citations = finalize_synthesis(
+            "The crm_sync job failed [Databricks Job #4830 (crm_sync) run #99163].",
+            [],
+            self.SUPPLIED,
+        )
+        assert "[Databricks" not in answer
+        assert answer == "The crm_sync job failed."
+        assert "Databricks Job #4830 (crm_sync) run #99163" in citations
+
+    def test_a_bracketed_paraphrase_of_a_source_is_lifted_out_too(self) -> None:
+        # "[Nightly crm_sync run 99163]" is not a supplied citation verbatim, but its ids
+        # belong to one — a bracketed aside naming a cited record is a reference, not prose.
+        answer, _ = finalize_synthesis(
+            "The nightly run failed on 2026-07-12 [Nightly crm_sync run 99163].",
+            [],
+            self.SUPPLIED,
+        )
+        assert "99163]" not in answer
+        assert answer == "The nightly run failed on 2026-07-12."
+
+    def test_a_bracketed_aside_that_is_not_a_reference_survives(self) -> None:
+        # The rule keys on the source's identifiers, so ordinary bracketed prose is safe.
+        text = "The job failed [see the runbook] before the sync."
+        answer, _ = finalize_synthesis(text, [], self.SUPPLIED)
+        assert answer == text
+
+
+class TestUnterminatedPlaceholder:
+    """The closing bracket is optional in _PLACEHOLDER, and that is the whole point."""
+
+    def test_an_unterminated_section_placeholder_is_stripped(self) -> None:
+        # The real leak, from QA query 10: "...a mismatch in the `customer_tier` column
+        # type [Sources. To resolve this..." — no closing bracket, so a pattern demanding a
+        # matching "]" let it straight through, and it took the judge's claim-splitting with
+        # it. Every heading given to this model has eventually come back in the prose.
+        cleaned = clean_answer(
+            "The job failed on a customer_tier mismatch [Sources. To resolve this, "
+            "follow the runbook [Sources."
+        )
+        assert "[Sources" not in cleaned
+        assert (
+            cleaned
+            == "The job failed on a customer_tier mismatch. To resolve this, follow the runbook."
+        )
+
+    @pytest.mark.parametrize("token", ["[Sources", "[SOURCES", "[Citations", "[Facts", "[Records"])
+    def test_every_unterminated_form_is_stripped(self, token: str) -> None:
+        assert "[" not in clean_answer(f"An answer {token}.")
+
+    def test_ordinary_bracketed_prose_still_survives(self) -> None:
+        # The section word has to follow the bracket immediately, so real asides are safe.
+        text = "The job failed [see the runbook] before the sync."
+        assert clean_answer(text) == text
+
+    def test_a_source_named_in_prose_is_not_a_placeholder(self) -> None:
+        # "sources" as an ordinary word, unbracketed, must never be touched.
+        text = "The runbook lists three sources for the failure."
+        assert clean_answer(text) == text
+
+
+class TestJsonWreckage:
+    """gemma3 ran off the end of a cross-domain answer into the structure of its own JSON
+    reply. The corrupt tail also defeated the grounding judge, so a correct four-source
+    answer came back UNVERIFIED (100%)."""
+
+    def test_the_answer_is_cut_at_the_json_wreckage(self) -> None:
+        # The real output, from QA query 9.
+        leaked = (
+            "The nightly `crm_sync` run 99163 failed on 2026-07-12; record last refreshed "
+            "2026-07-11.}]K. 1003 (Northwind Retail)."
+        )
+        cleaned = clean_answer(leaked)
+        assert "}" not in cleaned and "]K" not in cleaned
+        assert cleaned == (
+            "The nightly `crm_sync` run 99163 failed on 2026-07-12; record last refreshed "
+            "2026-07-11."
+        )
+
+    def test_no_fixture_string_contains_a_brace(self) -> None:
+        # This is the test that actually licenses the rule above. Cutting an answer at the
+        # first brace is only safe because no source can legitimately put one there — if a
+        # fixture ever quotes a brace in an error message or a note, this fails and the rule
+        # must be narrowed rather than the fixture changed.
+        import glob
+        import json as _json
+
+        offenders: list[str] = []
+
+        def walk(node: object, path: str = "") -> None:
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    walk(v, f"{path}/{k}")
+            elif isinstance(node, list):
+                for i, v in enumerate(node):
+                    walk(v, f"{path}[{i}]")
+            elif isinstance(node, str) and ("{" in node or "}" in node):
+                offenders.append(f"{path}: {node}")
+
+        for path in glob.glob("data/mock/*.json"):
+            with open(path) as fh:
+                walk(_json.load(fh))
+
+        assert offenders == [], f"a fixture quotes a brace, so the cut rule is unsafe: {offenders}"
+
+    def test_prose_without_braces_is_untouched(self) -> None:
+        text = "The job failed on s3://psiog-raw/events/part-0007.parquet at 02:14 UTC."
+        assert clean_answer(text) == text
+
+
+class TestDocumentCitationsSurvive:
+    """A document has no record id, so it can never be contradicted by the answer's own
+    identifiers — and must always be kept. An earlier key pattern matched any token with a
+    digit in it, which swept up filenames."""
+
+    SUPPLIED = [
+        "Databricks Job #4822 (ingestion_raw_events) run #99150",
+        "runbook-12-schema-mismatch.md § Recovery Steps",
+        "incident-2026-07-12-ingestion-failure.md § Actions",
+    ]
+
+    def test_a_runbook_is_cited_even_though_the_prose_never_names_the_file(self) -> None:
+        # The real failure, from QA query 10. The quarantine-and-rerun steps come straight
+        # from the runbook, and the answer cited only the Databricks job: half the answer
+        # uncited, in a query whose whole point is joining a live failure to a documented
+        # fix. It reported PASS.
+        answer = (
+            "The ingestion job (run #99150) failed with a SchemaMismatchException. To resolve "
+            "this, quarantine the offending file and re-run Databricks Job #4822."
+        )
+        _, citations = finalize_synthesis(answer, [self.SUPPLIED[0]], self.SUPPLIED)
+        assert citations == self.SUPPLIED  # all three, including both documents
+
+    def test_a_filename_is_not_a_record_identifier(self) -> None:
+        # "runbook-12-schema-mismatch.md" is not an id just because it contains a 12.
+        from psiog_kendra.prompting import _keys
+
+        assert _keys("runbook-12-schema-mismatch.md § Recovery Steps") == set()
+        assert _keys("incident-2026-07-12-ingestion-failure.md § Actions") == set()
+
+    def test_real_record_ids_are_still_recognised(self) -> None:
+        from psiog_kendra.prompting import _keys
+
+        # Normalised without the hash: the citation writes "#99163", the prose writes
+        # "99163", and the number is the fact — not the punctuation around it.
+        assert _keys("Databricks Job #4830 (crm_sync) run #99163") == {"4830", "99163"}
+        assert _keys("CRM account ACC-1001 (Acme Corp)") == {"acc-1001"}
+        assert _keys("CRM deal DEAL-7781 (Acme Corp)") == {"deal-7781"}
+
+    def test_a_contradicted_record_is_still_dropped(self) -> None:
+        # The narrower pattern must not weaken the check that matters: an answer about job
+        # #4822 is still never served citing job #4830.
+        supplied = [
+            "Databricks Job #4822 (ingestion_raw_events) run #99150",
+            "Databricks Job #4830 (crm_sync) run #99163",
+        ]
+        _, citations = finalize_synthesis(
+            "The failure was in job #4822 run #99150.", [supplied[1]], supplied
+        )
+        assert citations == [supplied[0]]
+
+
+class TestDanglingReference:
+    """A clause that exists only to introduce a citation is left pointing at nothing once the
+    citation is lifted out: "...stale records for Acme Corp and TechStart Ltd, as detailed in."
+    """
+
+    def test_a_dangling_reference_clause_is_removed(self) -> None:
+        answer, _ = finalize_synthesis(
+            "Stale records for Acme Corp and TechStart Ltd, as detailed in.", [], ALLOWED
+        )
+        assert answer == "Stale records for Acme Corp and TechStart Ltd."
+
+    @pytest.mark.parametrize(
+        "tail",
+        ["as detailed in.", "as described in.", "as documented in.", "according to.", "see."],
+    )
+    def test_every_dangling_form_is_removed(self, tail: str) -> None:
+        answer, _ = finalize_synthesis(f"The gate failed, {tail}", [], ALLOWED)
+        assert answer == "The gate failed."
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "The file was quarantined in the bucket.",
+            "The runbook says to re-run the job in the Databricks Jobs UI.",
+            "Coverage was 74%, as reported by the gate.",
+            "The error occurred in production.",
+        ],
+    )
+    def test_a_preposition_inside_a_real_sentence_is_untouched(self, text: str) -> None:
+        # The clause is only dangling when it has nothing after it.
+        answer, _ = finalize_synthesis(text, [], ALLOWED)
+        assert answer == text
+
+
+class TestTheModelDropsTheHash:
+    """A citation writes "run #99163"; the prose writes "run 99163". Requiring the hash on
+    both sides made every such citation look CONTRADICTED, and QA query 12 discussed
+    crm_sync run 99163, deploy-ingestion run 5530 and deal DEAL-7781 while citing none."""
+
+    SUPPLIED = [
+        "Databricks Job #4830 (crm_sync) run #99163",
+        "GitHub Actions run #5530 (deploy-ingestion, commit c40be71)",
+        "CRM deal DEAL-7781 (Acme Corp)",
+        "incident-2026-07-12-ingestion-failure.md § Known Issues",
+    ]
+
+    def test_a_record_named_without_its_hash_is_still_cited(self) -> None:
+        answer = (
+            "The crm_sync job (run 99163) failed. The deploy-ingestion pipeline (run 5530) "
+            "failed its gates. Deal DEAL-7781 remains in Negotiation."
+        )
+        _, citations = finalize_synthesis(answer, [], self.SUPPLIED)
+        assert citations == self.SUPPLIED  # all four, including the document
+
+    def test_the_mismatched_citation_guard_still_holds_without_hashes(self) -> None:
+        # The guard that matters must not be weakened by the looser match: an answer about
+        # run 99163 is still never served citing the unrelated GitHub build.
+        allowed = [
+            "Databricks Job #4830 (crm_sync) run #99163",
+            "GitHub Actions run #5530 (deploy-ingestion, commit c40be71)",
+        ]
+        _, citations = finalize_synthesis(
+            "The crm_sync job failed on run 99163.", [allowed[1]], allowed
+        )
+        assert citations == [allowed[0]]
+
+    def test_a_two_digit_number_is_not_a_record_id(self) -> None:
+        # "74% coverage", "12 accounts" — three digits minimum, so a count cannot masquerade
+        # as a record id and drag in an unrelated citation.
+        from psiog_kendra.prompting import _spoken_keys
+
+        assert _spoken_keys("Coverage was 74% across 12 gates.") == set()
+        assert _spoken_keys("Run 99163 failed.") == {"99163"}
+
+    def test_the_specialist_path_matches_hashless_records_too(self) -> None:
+        allowed = [
+            "CRM deal DEAL-7781 (Acme Corp)",
+            "CRM account ACC-1001 (Acme Corp)",
+        ]
+        answer = "Deal DEAL-7781 for account ACC-1001 is in Negotiation."
+        _, citations = finalize(answer, [], allowed)
+        assert set(citations) == set(allowed)

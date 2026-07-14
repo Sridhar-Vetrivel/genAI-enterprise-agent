@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 import pytest
 
-from psiog_kendra.config import reset_settings
+from psiog_kendra.config import reset_settings, settings
 from psiog_kendra.llm import LLMError
-from psiog_kendra.qa.judge import JudgeAgent, load_raw_sources, strip_citation_echoes
+from psiog_kendra.qa.judge import (
+    JudgeAgent,
+    claims_the_answer_actually_makes,
+    load_raw_sources,
+    strip_citation_echoes,
+    unsupported_facts,
+)
 from psiog_kendra.qa.report import (
     QAReport,
     QueryResult,
     evaluate_query,
     load_previous_results,
+    rejudge,
     render,
     run_qa,
 )
@@ -28,8 +36,18 @@ from psiog_kendra.schemas import (
 )
 from tests.conftest import FakeLLM, routing
 
+# The judge now checks that a "claim" is even about what the answer discusses, so both the
+# answer and the claims in these fixtures have to be real sentences. Single letters used to
+# do; they no longer can, and that is the point of the check.
+ANSWER = "The sales_etl pipeline succeeded at 02:14 UTC and wrote 1284502 records."
+CLAIMS = [
+    "The sales_etl pipeline succeeded",
+    "It ran at 02:14 UTC",
+    "It wrote 1284502 records",
+]
 
-def response(answer: str = "a", citations: list[str] | None = None) -> CopilotResponse:
+
+def response(answer: str = ANSWER, citations: list[str] | None = None) -> CopilotResponse:
     # `is None`, not `or`: an explicitly empty citation list is the case under test.
     cited = ["Databricks Job #4821"] if citations is None else citations
     return CopilotResponse(answer=answer, citations=cited, domains_used=["data-platform"])
@@ -75,6 +93,18 @@ class TestStripCitationEchoes:
         assert strip_citation_echoes(claims, [AUTH_CITE]) == claims
 
 
+# The real answer the copilot gave for QA query 4, and the real verdict the judge returned.
+AUTH_ANSWER = (
+    "The last deployment date for the auth service was 2026-07-09T11:05:00Z. All quality "
+    "gates passed during this deployment, including unit tests, code coverage (83% against "
+    "an 80% threshold), and the security scan which found no high/critical CVEs."
+)
+
+
+def auth_response() -> CopilotResponse:
+    return CopilotResponse(answer=AUTH_ANSWER, citations=[AUTH_CITE], domains_used=["devops"])
+
+
 class TestJudgeAgent:
     async def test_a_citation_echoed_as_a_claim_is_not_a_hallucination(
         self, fake_llm: FakeLLM
@@ -86,12 +116,12 @@ class TestJudgeAgent:
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(
             grounded_claims=[
                 "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
-                "All quality gates passed",
+                "All quality gates passed during this deployment",
                 "Code coverage was 83% against an 80% threshold",
             ],
             ungrounded_claims=[AUTH_CITE],
         )
-        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
         assert verdict.ungrounded_claims == []
         assert verdict.total_claims == 3
         assert verdict.hallucination_rate == 0.0
@@ -102,10 +132,10 @@ class TestJudgeAgent:
         # The same echo landed in grounded_claims on query 3 — inflating the denominator and
         # quietly making the hallucination rate look better than it is. Both directions go.
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(
-            grounded_claims=["The deployment passed all quality gates", AUTH_CITE],
-            ungrounded_claims=["It ran 900 tests"],
+            grounded_claims=["All quality gates passed during this deployment", AUTH_CITE],
+            ungrounded_claims=["Code coverage was 83% against an 80% threshold"],
         )
-        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
         assert verdict.total_claims == 2
         assert verdict.hallucination_rate == 50.0
 
@@ -115,23 +145,93 @@ class TestJudgeAgent:
         # If scrubbing the echoes leaves nothing, the judge enumerated nothing real. That
         # must not certify the answer as 0% — it is UNVERIFIED, which counts against us.
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=[AUTH_CITE])
-        verdict = await JudgeAgent(fake_llm).verify(response(citations=[AUTH_CITE]))
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
         assert verdict.hallucination_rate == 100.0
         assert "UNVERIFIED" in verdict.ungrounded_claims[0]
 
+    async def test_source_fields_the_answer_never_mentioned_are_not_claims(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # The real failure, from QA query 3. The judge stopped grading the answer and started
+        # summarising the source: it listed the branch, the actor, the commit sha and the run
+        # id — none of which the answer mentions. Each is trivially grounded (it copied them
+        # out of the source it is grading against), so each pads the denominator with a free
+        # pass and drags the hallucination rate DOWN. A metric that flatters us is the most
+        # dangerous kind, because nobody goes looking for the bug.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=[
+                "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
+                "The branch is main",
+                "The actor is priya.n",
+                "The commit sha is a1f9c34",
+                "The workflow run id is 5512",
+            ],
+        )
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+        assert verdict.grounded_claims == [
+            "The last deployment date for the auth service was 2026-07-09T11:05:00Z"
+        ]
+        assert verdict.total_claims == 1  # not 5
+
+    async def test_a_claim_graded_both_ways_is_sent_back_to_the_judge(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # The real failure, from QA query 3: "Yes, the latest deployment passed all quality
+        # gates" (grounded) and "The latest deployment ... passed all quality gates"
+        # (ungrounded) — the same assertion, filed under both verdicts at once. That single
+        # contradiction WAS the reported hallucination rate for a wholly grounded answer.
+        # A self-contradicting verdict says nothing about the answer; it says the judge
+        # slipped. So it grades again rather than us scoring a coin-flip.
+        contradictory = JudgeVerdict(
+            grounded_claims=["Yes, all quality gates passed during this deployment"],
+            ungrounded_claims=["All quality gates passed during this deployment"],
+        )
+        coherent = JudgeVerdict(grounded_claims=["All quality gates passed during this deployment"])
+        replies = iter([contradictory, coherent])
+        fake_llm.responses[JudgeVerdict] = lambda _: next(replies)
+
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+
+        assert len(fake_llm.calls) == 2
+        assert "BOTH grounded and ungrounded" in fake_llm.calls[1]["user"]
+        assert verdict.hallucination_rate == 0.0
+        assert verdict.ungrounded_claims == []
+
+    async def test_a_claim_contradicted_twice_is_set_aside_not_scored(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # If the judge contradicts itself twice on the same claim, it has not graded it.
+        # Scoring it either way would be a thumb on the scale, so it is set aside and the
+        # remaining claims are scored honestly.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=[
+                "Yes, all quality gates passed during this deployment",
+                "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
+            ],
+            ungrounded_claims=["All quality gates passed during this deployment"],
+        )
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+
+        assert len(fake_llm.calls) == 2  # it was given a second chance
+        assert verdict.grounded_claims == [
+            "The last deployment date for the auth service was 2026-07-09T11:05:00Z"
+        ]
+        assert verdict.ungrounded_claims == []
+        assert verdict.hallucination_rate == 0.0
+
     async def test_reports_a_clean_answer_as_grounded(self, fake_llm: FakeLLM) -> None:
-        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a", "b", "c"])
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=CLAIMS)
         verdict = await JudgeAgent(fake_llm).verify(response())
         assert verdict.hallucination_rate == 0.0
         assert verdict.is_measured is True
 
     async def test_detects_ungrounded_claims(self, fake_llm: FakeLLM) -> None:
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(
-            grounded_claims=["a", "b", "c"], ungrounded_claims=["Job ran at 09:00"]
+            grounded_claims=CLAIMS, ungrounded_claims=["The sales_etl pipeline ran at 09:00"]
         )
         verdict = await JudgeAgent(fake_llm).verify(response())
         assert verdict.hallucination_rate == 25.0
-        assert verdict.ungrounded_claims == ["Job ran at 09:00"]
+        assert verdict.ungrounded_claims == ["The sales_etl pipeline ran at 09:00"]
 
     async def test_an_uncited_answer_is_ungrounded_by_definition(self, fake_llm: FakeLLM) -> None:
         verdict = await JudgeAgent(fake_llm).verify(response(citations=[]))
@@ -147,7 +247,7 @@ class TestJudgeAgent:
     async def test_a_judge_that_enumerates_nothing_is_retried(self, fake_llm: FakeLLM) -> None:
         # The bug this guards: gemma3 returned zero claims for a substantive answer, which
         # scored as a perfect 0% hallucination without checking anything.
-        replies = iter([JudgeVerdict(), JudgeVerdict(grounded_claims=["a", "b"])])
+        replies = iter([JudgeVerdict(), JudgeVerdict(grounded_claims=CLAIMS[:2])])
         fake_llm.responses[JudgeVerdict] = lambda _: next(replies)
 
         verdict = await JudgeAgent(fake_llm).verify(response())
@@ -340,13 +440,20 @@ class TestRunQA:
             # Route by the ground truth so the harness itself can be tested.
             domains=sorted(next(q.expected_domains for q in TEST_QUERIES if q.query in user))
         )
+        # A fact-free answer on purpose: this test drives every domain with one canned
+        # reply, so an answer carrying a Databricks record count would be cited to the docs
+        # corpus and the deterministic fact check would (correctly) flag it. The harness is
+        # what is under test here, not grounding.
+        harness_answer = "The pipeline completed and the records were refreshed."
         fake_llm.responses[AgentResponse] = AgentResponse(
-            answer="a", citations=["Databricks Job #4821"]
+            answer=harness_answer, citations=["Databricks Job #4821"]
         )
         fake_llm.responses[SynthesisResult] = SynthesisResult(
-            answer="merged", citations=["Databricks Job #4821"]
+            answer=harness_answer, citations=["Databricks Job #4821"]
         )
-        fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a", "b"])
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["The pipeline completed", "The records were refreshed"]
+        )
 
         report = await run_qa(llm=fake_llm)
         assert len(report.results) == 12
@@ -366,7 +473,7 @@ class TestResume:
                 expected_domains=list(by_id(i).expected_domains),
                 actual_domains=list(by_id(i).expected_domains),
                 routed_correctly=True,
-                answer="from the previous run",
+                answer=ANSWER,
                 citations=["Databricks Job #4821"],
                 grounded_claim_texts=["a"],
                 judged=True,
@@ -384,7 +491,7 @@ class TestResume:
         self._seed(tmp_path, monkeypatch, [1, 2])
         previous = load_previous_results()
         assert set(previous) == {1, 2}
-        assert previous[1].answer == "from the previous run"
+        assert previous[1].answer == ANSWER
 
     async def test_resume_skips_completed_queries_and_runs_the_rest(
         self, fake_llm: FakeLLM, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -407,7 +514,7 @@ class TestResume:
 
         assert [r.id for r in report.results] == [1, 2, 3, 4]
         # Q1 and Q2 came off disk untouched; Q3 and Q4 were actually run.
-        assert report.results[0].answer == "from the previous run"
+        assert report.results[0].answer == ANSWER
         assert report.results[2].answer == "fresh"
 
     async def test_without_resume_every_query_is_run_again(
@@ -427,7 +534,37 @@ class TestResume:
         fake_llm.responses[JudgeVerdict] = JudgeVerdict(grounded_claims=["a"])
 
         report = await run_qa(llm=fake_llm, queries=TEST_QUERIES[:2])
-        assert all(r.answer != "from the previous run" for r in report.results)
+        assert all(r.answer != ANSWER for r in report.results)
+
+    async def test_rejudge_regrades_the_stored_answers_without_asking_them_again(
+        self, fake_llm: FakeLLM, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Every judge bug so far changed how answers are SCORED, not how they are produced.
+        # Re-running the copilot to pick one up reproduces answers we already have on disk,
+        # verbatim, at five LLM calls a query. Re-judging is one.
+        self._seed(tmp_path, monkeypatch, [1, 2, 3])
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["The sales_etl pipeline succeeded"],
+            ungrounded_claims=["It wrote 1284502 records"],
+        )
+
+        report = await rejudge(llm=fake_llm)
+
+        assert len(report.results) == 3
+        # The answers are untouched — only the verdicts are new.
+        assert all(r.answer == ANSWER for r in report.results)
+        assert report.hallucination_rate == 50.0
+        # The copilot was never invoked: only the judge ran, once per stored answer.
+        assert all(call["schema"] == "JudgeVerdict" for call in fake_llm.calls)
+        assert len(fake_llm.calls) == 3
+
+    async def test_rejudge_with_no_stored_answers_is_a_clear_error(
+        self, fake_llm: FakeLLM, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_REPORT_PATH", str(tmp_path / "absent.json"))
+        reset_settings()
+        with pytest.raises(SystemExit, match="no answers to re-judge"):
+            await rejudge(llm=fake_llm)
 
     def test_a_corrupt_report_resumes_from_nothing_rather_than_crashing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -444,3 +581,345 @@ class TestResume:
         monkeypatch.setenv("QA_REPORT_PATH", str(tmp_path / "absent.json"))
         reset_settings()
         assert load_previous_results() == {}
+
+
+class TestVerdictIsNeverThrownAway:
+    """The real failure, from QA query 9. The judge's first attempt enumerated claims but
+    contradicted itself on one; the retry came back empty; and a flawless four-source
+    cross-domain answer was reported as 100% ungrounded. A verdict that graded nine claims
+    out of ten is worth strictly more than no verdict at all."""
+
+    async def test_a_measured_first_verdict_survives_an_empty_retry(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        contradictory = JudgeVerdict(
+            grounded_claims=[
+                "Yes, all quality gates passed during this deployment",
+                "The last deployment date for the auth service was 2026-07-09T11:05:00Z",
+                "Code coverage was 83% against an 80% threshold",
+            ],
+            ungrounded_claims=["All quality gates passed during this deployment"],
+        )
+        replies = iter([contradictory, JudgeVerdict()])  # the retry comes back empty
+        fake_llm.responses[JudgeVerdict] = lambda _: next(replies)
+
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+
+        assert len(fake_llm.calls) == 2
+        assert verdict.is_measured is True
+        assert verdict.hallucination_rate == 0.0
+        # The two claims it graded coherently survive; the disputed one is set aside.
+        assert verdict.total_claims == 2
+        assert "UNVERIFIED" not in " ".join(verdict.ungrounded_claims)
+
+    async def test_a_measured_first_verdict_survives_a_judge_crash_on_retry(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        contradictory = JudgeVerdict(
+            grounded_claims=[
+                "Yes, all quality gates passed during this deployment",
+                "Code coverage was 83% against an 80% threshold",
+            ],
+            ungrounded_claims=["All quality gates passed during this deployment"],
+        )
+        replies = iter([contradictory, LLMError("judge died")])
+
+        def next_reply(_):
+            r = next(replies)
+            if isinstance(r, Exception):
+                raise r
+            return r
+
+        fake_llm.responses[JudgeVerdict] = next_reply
+
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+        assert verdict.is_measured is True
+        assert verdict.total_claims == 1
+        assert verdict.hallucination_rate == 0.0
+
+    async def test_a_judge_that_enumerates_nothing_twice_is_still_unverified(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # Nothing was ever graded, so there is no verdict to keep. This must NOT read as 0%.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict()
+        verdict = await JudgeAgent(fake_llm).verify(auth_response())
+        assert verdict.hallucination_rate == 100.0
+        assert "UNVERIFIED" in verdict.ungrounded_claims[0]
+        assert len(fake_llm.calls) == 2  # it was pushed once before giving up
+
+
+class TestQueryTimeout:
+    """A cross-domain query is 5-7 sequential LLM calls, and on local CPU inference it can
+    run past 15 minutes. Without a hard stop, one stalled query hangs the whole suite."""
+
+    async def test_a_stalled_query_is_recorded_as_timed_out_not_skipped(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_QUERY_TIMEOUT_SECONDS", "0.05")
+        reset_settings()
+
+        class Stalled:
+            async def ask(self, query: str):
+                await asyncio.sleep(10)  # never returns in time
+
+        result = await evaluate_query(by_id(9), Stalled(), None)
+
+        # Recorded, with the reason — a missing result and a failed one must not look alike.
+        assert result.id == 9
+        assert result.routed_correctly is False
+        assert result.error is not None
+        assert result.error.startswith("TIMED OUT")
+
+    async def test_the_timeout_message_names_the_cause_and_the_fix(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Whoever reads this report must not mistake a deployment constraint for a design
+        # flaw. The message has to say why it was slow and what makes it fast.
+        monkeypatch.setenv("QA_QUERY_TIMEOUT_SECONDS", "0.05")
+        reset_settings()
+
+        class Stalled:
+            async def ask(self, query: str):
+                await asyncio.sleep(10)
+
+        result = await evaluate_query(by_id(9), Stalled(), None)
+        assert "local CPU inference" in result.error
+        assert "OpenRouter is not provisioned" in result.error
+        assert "AI_MODEL_COMPLEX" in result.error
+
+    async def test_a_fast_query_is_unaffected_by_the_timeout(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_QUERY_TIMEOUT_SECONDS", "30")
+        monkeypatch.setenv("RAG_MIN_SCORE", "0.0")
+        reset_settings()
+        fake_llm.responses[RoutingDecision] = RoutingDecision(domains=["data-platform"])
+        fake_llm.responses[AgentResponse] = AgentResponse(
+            answer=ANSWER, citations=["Databricks Job #4821"]
+        )
+        from psiog_kendra.app import build_copilot
+
+        result = await evaluate_query(by_id(1), build_copilot(llm=fake_llm), None)
+        assert result.error is None
+        assert result.routed_correctly is True
+
+    async def test_zero_disables_the_limit(
+        self, fake_llm: FakeLLM, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("QA_QUERY_TIMEOUT_SECONDS", "0")
+        reset_settings()
+        assert settings().query_timeout_seconds == 0.0
+
+        class Slow:
+            async def ask(self, query: str):
+                await asyncio.sleep(0.01)
+                return CopilotResponse(
+                    answer=ANSWER,
+                    citations=["Databricks Job #4821"],
+                    domains_used=["data-platform"],
+                )
+
+        result = await evaluate_query(by_id(1), Slow(), None)
+        assert result.error is None  # no timeout applied
+
+
+class TestPhantomClaims:
+    """From QA query 10. The answer was flawless — it joined the live failure to the
+    runbook's fix and cited all three sources — and the judge scored it 53.85% by inventing
+    seven claims it had read out of the source."""
+
+    Q10_ANSWER = (
+        "The ingestion job `ingestion_raw_events` (run #99150) failed on 2026-07-12 due to a "
+        "`SchemaMismatchException`. To resolve this, quarantine the offending file and then "
+        "re-run Databricks Job #4822. Following this, manually re-run job 4830 (`crm_sync`)."
+    )
+
+    async def test_an_id_the_answer_never_uttered_is_not_a_claim(self, fake_llm: FakeLLM) -> None:
+        # "The job id is 4821" — the answer mentions 4822 and 4830, never 4821. Word overlap
+        # alone passed it ("job" matched, so it scored exactly 0.5 and squeaked through). An
+        # id cannot be paraphrased: if the answer does not say 4821, it did not claim 4821.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["The ingestion job (run #99150) failed"],
+            ungrounded_claims=[
+                "The job id is 4821",
+                "The run id is 99141",
+                "The run id is 99102",
+            ],
+        )
+        response = CopilotResponse(
+            answer=self.Q10_ANSWER,
+            citations=["Databricks Job #4822 (ingestion_raw_events) run #99150"],
+            domains_used=["data-platform", "docs"],
+        )
+        verdict = await JudgeAgent(fake_llm).verify(response)
+        assert verdict.ungrounded_claims == []
+        assert verdict.hallucination_rate == 0.0
+
+    def test_a_field_restatement_is_not_a_claim_even_when_the_id_is_in_the_answer(
+        self,
+    ) -> None:
+        # "The job id is 4822" is a row of the record, not an assertion. The substantive
+        # claim about that job is enumerated separately and still graded.
+        kept = claims_the_answer_actually_makes(
+            ["The job id is 4822", "Then re-run Databricks Job #4822"], self.Q10_ANSWER
+        )
+        assert kept == ["Then re-run Databricks Job #4822"]
+
+    @pytest.mark.parametrize(
+        "field_claim",
+        [
+            "The job id is 4822",
+            "The run id is 99150",
+            "The branch is main",
+            "The actor is priya.n",
+            "The commit sha is a1f9c34",
+            "The result state is FAILED",
+        ],
+    )
+    def test_every_field_restatement_shape_is_dropped(self, field_claim: str) -> None:
+        assert claims_the_answer_actually_makes([field_claim], self.Q10_ANSWER) == []
+
+    def test_a_real_hallucination_is_still_caught(self) -> None:
+        # The property that matters: none of this may hide a fabricated fact. A hallucination
+        # is something the ANSWER asserted, so it is built from the answer's own words and
+        # its own identifiers — it passes every filter and is still graded.
+        answer = "The sales_etl job succeeded and wrote 9999999 records at 02:14 UTC."
+        claims = ["The job wrote 9999999 records", "The sales_etl job succeeded"]
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+    def test_a_fabricated_id_the_answer_did_assert_is_still_graded(self) -> None:
+        # If the answer really does invent a run, the substantive claim carrying it survives.
+        answer = "Job #9999 failed with a schema mismatch."
+        claims = ["Job #9999 failed with a schema mismatch"]
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+    def test_a_real_claim_quoting_a_file_path_survives(self) -> None:
+        claims = ["The source file is `s3://psiog-raw/events/2026-07-12/part-0007.parquet`"]
+        answer = "It failed on `s3://psiog-raw/events/2026-07-12/part-0007.parquet`."
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+
+class TestDistinctiveTerms:
+    """From QA query 11. The judge produced "The `customer_tier` field was an IntegerType" for
+    an answer that never says IntegerType — it read the type out of the source. Word overlap
+    could not catch it: "customer", "tier" and "field" are all in the answer, so it scored 0.67
+    and sailed past the 0.5 threshold. The give-away is the one long word carrying the claim's
+    whole meaning."""
+
+    Q11_ANSWER = (
+        "The latest deployment failed to complete. The code coverage gate failed at 74% "
+        "(threshold 80%) and the integration tests failed with 3 schema contract test failures "
+        "for the `customer_tier` field expecting a StringType."
+    )
+
+    def test_a_type_the_answer_never_named_is_not_a_claim(self) -> None:
+        # The answer says StringType. The source says the value WAS an IntegerType. The judge
+        # lifted the latter from the record; the answer never asserted it.
+        phantom = "The `customer_tier` field was an IntegerType"
+        assert claims_the_answer_actually_makes([phantom], self.Q11_ANSWER) == []
+
+    def test_a_long_term_lifted_from_the_source_is_dropped(self) -> None:
+        phantom = "The job failed due to an UpstreamDependencyFailed error"
+        assert claims_the_answer_actually_makes([phantom], self.Q11_ANSWER) == []
+
+    def test_the_long_terms_the_answer_did_use_are_kept(self) -> None:
+        # The rule must not eat real claims. Every long word here IS in the answer.
+        claims = [
+            "The integration tests failed with 3 schema contract test failures",
+            "The code coverage gate failed at 74%",
+        ]
+        assert claims_the_answer_actually_makes(claims, self.Q11_ANSWER) == claims
+
+    def test_an_inflection_still_counts_as_spoken(self) -> None:
+        # "deployment" in the answer must satisfy "deployments" in the claim — matched on the
+        # first 8 characters. Otherwise the rule would drop real claims over a plural.
+        answer = "The deployment of the payments service succeeded."
+        claims = ["Deployments of the payments service succeeded"]
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+    def test_a_real_hallucination_carrying_a_long_word_is_still_caught(self) -> None:
+        # The property that must hold: this cannot hide a fabrication. If the ANSWER asserts
+        # the long term, the claim is built from the answer's own words and is still graded.
+        answer = "The job failed with a SchemaMismatchException on the customer_tier column."
+        claims = ["The job failed with a SchemaMismatchException"]
+        assert claims_the_answer_actually_makes(claims, answer) == claims
+
+
+class TestDeterministicFactCheck:
+    """The deterministic half of the judge. It exists because the LLM half missed a
+    hallucination: on QA query 11 the answer said "Job 4822 failed on 2026-07-13", the source
+    says 2026-07-12, and gemma3:4b marked it GROUNDED. A judge that under-reports is the
+    worst outcome this system has — the number looks good, so nobody investigates."""
+
+    SOURCES = {
+        "databricks": {
+            "runs": [
+                {
+                    "job_id": 4822,
+                    "run_id": 99150,
+                    "job_name": "ingestion_raw_events",
+                    "start_time": "2026-07-12T00:04:00Z",
+                    "result_state": "FAILED",
+                }
+            ]
+        }
+    }
+
+    def test_a_fabricated_date_is_caught(self) -> None:
+        answer = "Job 4822 (ingestion_raw_events) failed on 2026-07-13."
+        assert unsupported_facts(answer, self.SOURCES) == ["2026-07-13"]
+
+    def test_a_correct_date_is_not_flagged(self) -> None:
+        answer = "Job 4822 failed on 2026-07-12 (run 99150)."
+        assert unsupported_facts(answer, self.SOURCES) == []
+
+    def test_a_fabricated_run_id_is_caught(self) -> None:
+        answer = "Run 99999 failed."
+        assert unsupported_facts(answer, self.SOURCES) == ["99999"]
+
+    def test_percentages_and_small_numbers_are_not_hard_facts(self) -> None:
+        # "74%", "three accounts", "both gates" are ordinary prose. Flagging them would drown
+        # a real finding in noise.
+        answer = "Coverage was 74% against an 80% threshold, and 2 accounts went stale."
+        assert unsupported_facts(answer, self.SOURCES) == []
+
+    async def test_the_llm_judge_cannot_wave_a_fabricated_date_through(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # The real failure. The judge said every claim was grounded, including the bad date.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=[
+                "Job 4822 (ingestion_raw_events) failed on 2026-07-13",
+                "The failure triggered a SchemaMismatchException",
+            ],
+        )
+        response = CopilotResponse(
+            answer=(
+                "Job 4822 (`ingestion_raw_events`) failed on 2026-07-13, triggering a "
+                "SchemaMismatchException."
+            ),
+            citations=["Databricks Job #4822 (ingestion_raw_events) run #99150"],
+            domains_used=["data-platform"],
+        )
+        judge = JudgeAgent(fake_llm, raw_sources={"databricks": self.SOURCES["databricks"]})
+        verdict = await judge.verify(response)
+
+        assert verdict.hallucination_rate > 0.0
+        assert any("2026-07-13" in c for c in verdict.ungrounded_claims)
+        # The claim carrying the bad date must not still be counted as grounded.
+        assert not any("2026-07-13" in c for c in verdict.grounded_claims)
+
+    async def test_it_can_only_add_findings_never_remove_them(self, fake_llm: FakeLLM) -> None:
+        # It must never be able to make an answer look cleaner than the LLM judge found it.
+        fake_llm.responses[JudgeVerdict] = JudgeVerdict(
+            grounded_claims=["Job 4822 failed"],
+            ungrounded_claims=["The job succeeded"],
+        )
+        response = CopilotResponse(
+            answer="Job 4822 failed. The job succeeded.",
+            citations=["Databricks Job #4822 (ingestion_raw_events) run #99150"],
+            domains_used=["data-platform"],
+        )
+        judge = JudgeAgent(fake_llm, raw_sources={"databricks": self.SOURCES["databricks"]})
+        verdict = await judge.verify(response)
+        assert "The job succeeded" in verdict.ungrounded_claims

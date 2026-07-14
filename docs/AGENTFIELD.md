@@ -91,7 +91,7 @@ Agents that run for hours or days. Webhooks with automatic retries. Backpressure
 # Fire-and-forget: webhook called when done
 result = await app.call(
     "[node_id].[reasoner_name]",
-    input={  //JSON PAYLOAD },
+    [param_name]=[value],   # the reasoner's own parameters, as keyword arguments
     async_config=AsyncConfig(
         webhook_url="[WEBHOOK_URL]",
         timeout_hours=[TIMEOUT_IN_HOURS]
@@ -102,9 +102,14 @@ result = await app.call(
 ## 7. Multi-Agent Coordination
 Agents that discover and invoke each other through the control plane. Every call tracked. Every workflow visualized as a DAG.
 ```python
-# Agent A calls Agent B—routed through control plane, fully traced
-analysis = await app.call("[agent_A_node_id].[reasoner_name]", input={ //JSON PAYLOAD })
-report = await app.call("[agent_B_node_id].[reasoner_name]", input={ //JSON PAYLOAD })
+# Agent A calls Agent B—routed through control plane, fully traced.
+# The target reasoner's parameters are passed as KEYWORD ARGUMENTS. There is no `input={...}`
+# envelope: that is the shape of the REST execute API (`POST /api/v1/execute/<node>.<fn>`
+# with a JSON body of `{"input": {...}}`), NOT of the SDK call. Passing `input={"query": q}`
+# sends a parameter literally named `input` and the target's own `query` is never set --
+# it fails with `agent error (422): Missing required field: query`.
+analysis = await app.call("[agent_A_node_id].[reasoner_name]", [param_name]=[value])
+report = await app.call("[agent_B_node_id].[reasoner_name]", [param_name]=[value])
 ```
 
 ## 8. Memory Event Listener on memory state change in Agent

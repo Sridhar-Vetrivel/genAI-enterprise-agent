@@ -75,6 +75,17 @@ class Settings:
     agentfield_server: str = field(
         default_factory=lambda: _env("AGENTFIELD_SERVER", "http://localhost:8080")
     )
+    # Where the control plane lists the nodes it will actually route to.
+    #
+    # NOT `/api/v1/nodes`: that lists only nodes whose health_status is "active", and a node
+    # that registered while its port was still binding stays "unknown" forever -- yet the
+    # control plane routes to it perfectly well (verified: an execute call against an
+    # "unknown" node succeeds). Judging health by /nodes therefore condemns working nodes.
+    # The discovery endpoint lists what the control plane can actually call, which is the
+    # only thing "routable" should mean.
+    agentfield_discovery_path: str = field(
+        default_factory=lambda: _env("AGENTFIELD_DISCOVERY_PATH", "/api/v1/discovery/capabilities")
+    )
     agentfield_execute_path: str = field(
         default_factory=lambda: _env("AGENTFIELD_EXECUTE_PATH", "/api/v1/execute")
     )
@@ -86,6 +97,27 @@ class Settings:
     node_crm: str = field(default_factory=lambda: _env("NODE_CRM_AGENT", "crm-agent"))
     node_docs: str = field(default_factory=lambda: _env("NODE_DOCS_AGENT", "docs-agent"))
     node_judge: str = field(default_factory=lambda: _env("NODE_JUDGE_AGENT", "judge-agent"))
+
+    # ---------------- Agent node ports ----------------
+    # Each node serves its own FastAPI app, and AgentField defaults every one of them to
+    # 8001. Started together on one host, the first node wins the socket and the other
+    # four die on "address already in use" -- *after* they have registered with the
+    # control plane. The fleet then looks healthy (5 nodes listed) while 4 of them are
+    # dead, and every `app.call()` to them hangs. One port per node, explicitly.
+    port_coordinator: int = field(default_factory=lambda: _int("PORT_COORDINATOR", 8001))
+    port_data: int = field(default_factory=lambda: _int("PORT_DATA_AGENT", 8002))
+    port_devops: int = field(default_factory=lambda: _int("PORT_DEVOPS_AGENT", 8003))
+    port_crm: int = field(default_factory=lambda: _int("PORT_CRM_AGENT", 8004))
+    port_docs: int = field(default_factory=lambda: _int("PORT_DOCS_AGENT", 8005))
+
+    # The host the CONTROL PLANE uses to call a node back. The nodes run on the host; the
+    # control plane runs in Docker, where "localhost" is the container itself -- so a node
+    # that registers `http://localhost:8002` tells the control plane to dial its own empty
+    # port, and every call dies on "connection refused". Set to `localhost` when the
+    # control plane is not containerised.
+    agent_callback_host: str = field(
+        default_factory=lambda: _env("AGENT_CALLBACK_HOST", "host.docker.internal")
+    )
 
     # ---------------- Data sources ----------------
     # No Databricks/GitHub/CRM tenant is provisioned, so the specialists read realistic
@@ -131,6 +163,20 @@ class Settings:
     judge_source_char_limit: int = field(
         default_factory=lambda: _int("QA_JUDGE_SOURCE_CHAR_LIMIT", 5000)
     )
+    # How much of a "claim" must overlap the answer's own words before we accept that the
+    # answer really made it. The judge tends to enumerate source fields the answer never
+    # mentioned ("The actor is priya.n"), which pad the denominator with free passes and
+    # flatter the hallucination rate. Raise it to be stricter about what counts as a claim.
+    judge_claim_overlap: float = field(
+        default_factory=lambda: _float("QA_JUDGE_CLAIM_OVERLAP", 0.5)
+    )
+    # Hard stop per query. A cross-domain query is 5-7 sequential LLM calls and on local CPU
+    # inference it can run 15 minutes or more; a stalled one would otherwise hang the suite
+    # indefinitely. On timeout the query is RECORDED as timed out, never silently skipped —
+    # a missing result and a failed result must not look the same. 0 disables the limit.
+    query_timeout_seconds: float = field(
+        default_factory=lambda: _float("QA_QUERY_TIMEOUT_SECONDS", 900.0)
+    )
 
     # ---------------- Paths ----------------
     docs_dir: Path = field(default_factory=lambda: _path("DOCS_DIR", "data/docs"))
@@ -162,6 +208,21 @@ class Settings:
             CRM: self.node_crm,
             DOCS: self.node_docs,
         }
+
+    @property
+    def node_to_port(self) -> dict[str, int]:
+        """Node id -> the port that node serves on. Both sides are env-configurable."""
+        return {
+            self.node_coordinator: self.port_coordinator,
+            self.node_data: self.port_data,
+            self.node_devops: self.port_devops,
+            self.node_crm: self.port_crm,
+            self.node_docs: self.port_docs,
+        }
+
+    def callback_url(self, node_id: str) -> str:
+        """The URL the control plane should dial to reach this node."""
+        return f"http://{self.agent_callback_host}:{self.node_to_port[node_id]}"
 
 
 _cached: Settings | None = None

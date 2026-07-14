@@ -19,7 +19,7 @@ from typing import Protocol
 from psiog_kendra.config import settings
 from psiog_kendra.domains import ALL_DOMAINS, agent_for, domain_catalog
 from psiog_kendra.llm import Complexity, LLMError, LLMGateway
-from psiog_kendra.prompting import clean_answer
+from psiog_kendra.prompting import finalize_synthesis
 from psiog_kendra.schemas import AgentResponse, CopilotResponse, RoutingDecision, SynthesisResult
 
 ROUTING_SYSTEM = f"""You are the coordinator of the Psiog enterprise copilot.
@@ -162,14 +162,23 @@ class Coordinator:
             only = next(iter(answers.values()))
             return only.answer, only.citations
 
+        # Every label in this prompt has been copied into an answer at least once. First it
+        # was the bracketed agent tag ("...zero rows synced to CRM [data-agent]"), so that
+        # went. Its replacement, a "Sources it used:" line, came back as an unterminated
+        # "...column type [Sources. To resolve this..." — the model will echo ANY heading it
+        # is given. So nothing here is headed like a field: the reports are plain sentences,
+        # and finalize_synthesis scrubs whatever still leaks. Prompt discipline alone has
+        # never held at this model size; the strip is the part that actually holds.
         reports = "\n\n".join(
-            f"[{agent_for(d)}] {a.answer}\nCitations: {', '.join(a.citations) or 'none'}"
+            f"The {agent_for(d)} looked into this and found:\n{a.answer}\n"
+            f"It read {', '.join(a.citations) or 'nothing'}."
             for d, a in answers.items()
         )
         user = (
             f"User question: {query}\n\n"
-            f"Specialist reports:\n{reports}\n\n"
-            f"Write the unified answer, preserving every citation."
+            f"{reports}\n\n"
+            f"Write the unified answer as plain prose for a colleague. Name no specialist and "
+            f"no source in the answer text — the sources go in the citations field, nowhere else."
         )
         try:
             result = await self._llm.structured(
@@ -183,8 +192,7 @@ class Coordinator:
             merged = " ".join(a.answer for a in answers.values())
             return merged, citations
 
-        kept = [c for c in result.citations if c in citations]
-        return clean_answer(result.answer), kept or citations
+        return finalize_synthesis(result.answer, result.citations, citations)
 
     async def ask(self, query: str) -> CopilotResponse:
         """The full lifecycle: route -> dispatch -> synthesise."""

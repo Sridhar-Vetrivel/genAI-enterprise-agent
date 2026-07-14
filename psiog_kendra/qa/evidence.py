@@ -12,6 +12,7 @@ See docs/MidTerm_Submission_Reference.md for how these map to Evidence IDs.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from psiog_kendra.config import settings
@@ -27,12 +28,130 @@ DOMAIN_TO_DELIVERABLE = {
 }
 
 
+def evidence_id(index: int) -> str:
+    """EV-01, EV-02, ... — the key the mid-term template's Section 4.1 index is built on.
+
+    Section 3 requires every deliverable marked Done or Partial to point at one of these,
+    and the evaluator cross-checks that link. A page without an Evidence ID cannot be
+    referenced, so it cannot support a claim.
+    """
+    return f"EV-{index:02d}"
+
+
 def _deliverables(domains: list[str]) -> list[str]:
     items = ["D-02 (Week 5 — Coordinator routing)"]
     items += [DOMAIN_TO_DELIVERABLE[d] for d in domains if d in DOMAIN_TO_DELIVERABLE]
     if len(domains) > 1:
         items.append("D-07 (cross-domain synthesis, cited across systems)")
     return items
+
+
+@dataclass(frozen=True)
+class Artefact:
+    """Evidence the 12 test queries structurally cannot provide.
+
+    A query proves an agent routes and cites. It says nothing about whether the test suite
+    passes, what the coverage figure is, whether the RAG index built, or whether the control
+    plane runs — and Sections 3 and 6 of the template ask for exactly those. Screenshot only
+    the query pages and D-01 and D-08 have no evidence at all.
+    """
+
+    slug: str
+    title: str
+    deliverable: str
+    caption: str
+    command: str
+    look_for: list[str]
+    note: str = ""
+
+
+ARTEFACTS: tuple[Artefact, ...] = (
+    Artefact(
+        slug="qa-summary",
+        title="QA summary — routing accuracy and hallucination rate",
+        deliverable="D-07 (12 test queries, grounded and cited)",
+        caption="The graded QA run: routing accuracy and hallucination rate across all 12 queries",
+        command="make qa",
+        look_for=[
+            "the `Routing accuracy` line — the headline number for Section 6",
+            "the `Hallucination rate` line, and the claim counts behind it",
+            "the `Answers judged` line — a rate computed from unjudged answers is worthless, "
+            "so this must read 12/12",
+            "the per-query PASS lines above the summary",
+        ],
+        note=(
+            "**On response time — say this before anyone asks.** A full run is ~60 LLM calls "
+            "and takes about an hour, and a single cross-domain query takes 8-15 minutes. "
+            "That is *not* the architecture. Every call runs on `gemma3:4b` under Ollama, on "
+            "CPU, with no GPU, because **OpenRouter is not provisioned** and the zero-cost "
+            "local fallback is carrying the whole build. A cross-domain query is 5-7 calls "
+            "that cannot be parallelised — the coordinator cannot synthesise until the "
+            "specialists answer, and the judge cannot grade until the answer exists. On a "
+            "hosted endpoint those calls are sub-second, so the same run finishes in "
+            "single-digit minutes and the answers get *better*: most of the leak-stripping "
+            "and citation-repair in `prompting.py` exists to compensate for a 4B model. "
+            "`AI_MODEL_COMPLEX` is an env var — the day OpenRouter is provisioned the model "
+            "swaps with no code change. Record it in Section 8 as a deployment constraint, "
+            "not a design one."
+        ),
+    ),
+    Artefact(
+        slug="tests-coverage",
+        title="Test suite and coverage",
+        deliverable="D-08 (unit tests passing; coverage >= 50%)",
+        caption="Full offline test suite passing, with the measured coverage figure",
+        command="make cov",
+        look_for=[
+            "the final `TOTAL` coverage percentage — this is the real tool figure Section 6 "
+            "demands, not a claim",
+            "the passed/failed count on the last line",
+            "the per-module table, which shows coverage is spread across routing, retrieval, "
+            "sources and QA — not concentrated in one easy module",
+        ],
+        note=(
+            "This suite runs with no LLM, no network and no control plane, which is why it is "
+            "fast and reproducible. That is the point of keeping `psiog_kendra/` framework-free."
+        ),
+    ),
+    Artefact(
+        slug="rag-index",
+        title="RAG index build",
+        deliverable="D-04 (Docs agent + RAG index: chunked, embedded, searchable)",
+        caption="The documentation corpus chunked, embedded and indexed for similarity search",
+        command="make index",
+        look_for=[
+            "the chunk count and the embedding model (`nomic-embed-text`, 768-dim)",
+            "`0 orphans` — every chunk carries a citation, so no retrieved text can be "
+            "un-attributable",
+            "the path the index is written to",
+        ],
+        note=(
+            "Gemma 3 cannot produce embeddings at all, which is why a separate embedding model "
+            "is pulled. Worth stating in Section 8 as a deviation."
+        ),
+    ),
+    Artefact(
+        slug="control-plane",
+        title="AgentField control plane and the 5 registered agents",
+        deliverable="D-01 (control plane via Docker Compose)",
+        caption="The AgentField control plane running, with all five agent nodes registered",
+        command="make up && make agents",
+        look_for=[
+            "the control plane container coming up healthy",
+            "all five nodes registering: coordinator, data, devops, crm, docs",
+            "the control-plane URL, so the evaluator can see it is self-hosted and not a "
+            "managed service",
+        ],
+        note=(
+            "**D-01 is Partial, not Done, and should be declared as such.** The approved "
+            "proposal committed to the control plane *plus* an Azure VM *plus* OpenRouter "
+            "connected. OpenRouter is not provisioned, so all inference runs locally at "
+            "zero cost. Claiming D-01 as Done without evidence for those two parts is exactly "
+            "the inconsistency the evaluator cross-checks for — declare it Partial and record "
+            "the deviation in Section 8."
+        ),
+    ),
+)
 
 
 def render_query(result: dict[str, Any]) -> str:
@@ -55,9 +174,10 @@ def render_query(result: dict[str, Any]) -> str:
 
     kind = "cross-domain" if len(expected) > 1 else "single-domain"
     verdict = "✅ PASS — routed exactly as expected" if passed else "❌ FAIL"
+    eid = evidence_id(qid)
 
     lines: list[str] = [
-        f"# Q{qid:02d} — {kind.title()} — {'PASS' if passed else 'FAIL'}",
+        f"# {eid} — Q{qid:02d} — {kind.title()} — {'PASS' if passed else 'FAIL'}",
         "",
         f"> **Question asked:** “{tq.query}”",
         "",
@@ -65,6 +185,7 @@ def render_query(result: dict[str, Any]) -> str:
         "",
         "| | |",
         "|---|---|",
+        f"| **Evidence ID** | **{eid}** (cite this from Section 3) |",
         f"| **Test query #** | {qid} of 12 |",
         f"| **Type** | {kind} |",
         f"| **Expected domain(s)** | `{'`, `'.join(expected)}` |",
@@ -206,6 +327,7 @@ def render_query(result: dict[str, Any]) -> str:
         "",
         "   | Field | Value |",
         "   |---|---|",
+        f"   | Evidence ID | {eid} |",
         f"   | What this proves | Q{qid:02d} routes to "
         f"`{'`, `'.join(actual) or '—'}` and returns a cited, grounded answer |",
         f"   | Deliverable ID | {', '.join(d.split(' ')[0] for d in _deliverables(actual))} |",
@@ -223,6 +345,107 @@ def render_query(result: dict[str, Any]) -> str:
         "Do not hand-edit — re-run `make qa && make evidence` instead.*",
     ]
     return "\n".join(lines) + "\n"
+
+
+def render_artefact(artefact: Artefact, index: int) -> str:
+    """An evidence page for something the 12 test queries cannot prove.
+
+    A query shows an agent routing and citing. It says nothing about whether the suite
+    passes, what coverage actually is, whether the index built, or whether the control plane
+    runs — and Sections 3 and 6 ask for all four. Without these, D-01 and D-08 would go into
+    the submission with no evidence behind them at all.
+    """
+    cfg = settings()
+    eid = evidence_id(index)
+
+    lines = [
+        f"# {eid} — {artefact.title}",
+        "",
+        "| | |",
+        "|---|---|",
+        f"| **Evidence ID** | **{eid}** (cite this from Section 3) |",
+        f"| **Deliverable** | {artefact.deliverable} |",
+        f"| **Command** | `{artefact.command}` |",
+        "",
+        "## Why this page exists",
+        "",
+        "The 12 test-query pages prove the agents route correctly and answer with citations. "
+        "They cannot prove this. Screenshot only the query pages and this deliverable goes "
+        "into the submission unevidenced, which is precisely the inconsistency the evaluator "
+        "cross-checks for.",
+        "",
+        "## 📸 How to take the screenshot",
+        "",
+        "1. Open a terminal wide enough that no line wraps.",
+        "",
+        "2. Run the command, keeping it visible above its output:",
+        "",
+        "   ```bash",
+        f"   {artefact.command}",
+        "   ```",
+        "",
+        "3. Check that these are all in the same frame:",
+        "",
+    ]
+    lines += [f"   - {item}," for item in artefact.look_for]
+    lines += [
+        "",
+        "4. Screenshot the **whole terminal window**, not a crop.",
+        "",
+        "5. Paste it into the mid-term doc under its Evidence block, and fill the header table:",
+        "",
+        "   | Field | Value |",
+        "   |---|---|",
+        f"   | Evidence ID | {eid} |",
+        f"   | What this proves | {artefact.caption} |",
+        f"   | Deliverable ID | {artefact.deliverable.split(' ')[0]} |",
+        "   | Date captured | *(fill in)* |",
+        "   | Verifiable link | *(GitHub commit)* |",
+        "",
+    ]
+    if artefact.note:
+        lines += ["> " + artefact.note.replace("\n", "\n> "), ""]
+
+    lines += [
+        "---",
+        "",
+        f"*Generated by `make evidence`. Models: `{cfg.model_complex}` / `{cfg.model_simple}`, "
+        "local Ollama, ₹0.*",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def evidence_rows(report: dict[str, Any]) -> list[tuple[str, str, str, str]]:
+    """(Evidence ID, caption, deliverable IDs, file) for every page — the Section 4.1 index."""
+    rows: list[tuple[str, str, str, str]] = []
+    results = {r["id"]: r for r in report["results"]}
+
+    for tq in TEST_QUERIES:
+        r = results.get(tq.id)
+        if not r:
+            continue
+        domains = r["actual_domains"]
+        rows.append(
+            (
+                evidence_id(tq.id),
+                f"Q{tq.id:02d} “{tq.query}” routes to "
+                f"{', '.join(domains) or '—'} and answers with citations",
+                ", ".join(d.split(" ")[0] for d in _deliverables(domains)),
+                f"q{tq.id:02d}.md",
+            )
+        )
+
+    for offset, artefact in enumerate(ARTEFACTS):
+        idx = len(TEST_QUERIES) + offset + 1
+        rows.append(
+            (
+                evidence_id(idx),
+                artefact.caption,
+                artefact.deliverable.split(" ")[0],
+                f"{evidence_id(idx).lower()}-{artefact.slug}.md",
+            )
+        )
+    return rows
 
 
 def render_index(report: dict[str, Any]) -> str:
@@ -290,12 +513,44 @@ def render_index(report: dict[str, Any]) -> str:
 
     lines += [
         "",
-        "## How these map to the mid-term submission",
+        "## Beyond the queries",
         "",
-        "Each page ends with screenshot instructions and a pre-filled Evidence-block header "
-        "table. See [../MidTerm_Submission_Reference.md](../MidTerm_Submission_Reference.md) "
-        "for the template's rules — every deliverable marked Done/Partial in Section 3 must "
-        "point to at least one Evidence ID here.",
+        "A test query proves an agent routes correctly and cites its source. It cannot show "
+        "that the suite passes, what the coverage figure really is, that the RAG index built, "
+        "or that the control plane runs — and Sections 3 and 6 ask for all four. Screenshot "
+        "only the query pages and **D-01 and D-08 go into the submission unevidenced**.",
+        "",
+        "| Evidence | Proves | Command | Page |",
+        "|---|---|---|---|",
+    ]
+    for offset, artefact in enumerate(ARTEFACTS):
+        eid = evidence_id(len(TEST_QUERIES) + offset + 1)
+        name = f"{eid.lower()}-{artefact.slug}.md"
+        lines.append(
+            f"| **{eid}** | {artefact.caption} | `{artefact.command}` | [{name}]({name}) |"
+        )
+
+    lines += [
+        "",
+        "## Section 4.1 — Evidence Index (paste this into the mid-term doc)",
+        "",
+        "The template requires one row per evidence block, and Section 3 requires every "
+        "deliverable marked Done or Partial to point at an Evidence ID here. The evaluator "
+        "cross-checks that link, so a page with no ID cannot support a claim.",
+        "",
+        "| Evidence ID | Caption (what it proves) | Deliverable ID | Date captured | Link |",
+        "|---|---|---|---|---|",
+    ]
+    for eid, caption, deliverables, _ in evidence_rows(report):
+        lines.append(f"| {eid} | {caption} | {deliverables} | *(fill in)* | *(GitHub commit)* |")
+
+    lines += [
+        "",
+        "> **D-01 is Partial, not Done.** The approved proposal committed to the control plane "
+        "*plus* an Azure VM *plus* OpenRouter connected. OpenRouter is not provisioned — all "
+        "inference is local at ₹0. Declare it Partial and record the deviation in Section 8; "
+        "claiming it Done without evidence for those parts is exactly what the consistency "
+        "check catches.",
         "",
         "```bash",
         "make qa && make evidence   # re-run the suite and regenerate this directory",
@@ -321,10 +576,17 @@ def build_evidence() -> tuple[int, list[str]]:
         path.write_text(render_query(result))
         written.append(path.name)
 
+    for offset, artefact in enumerate(ARTEFACTS):
+        eid = evidence_id(len(TEST_QUERIES) + offset + 1)
+        path = out_dir / f"{eid.lower()}-{artefact.slug}.md"
+        path.write_text(render_artefact(artefact, len(TEST_QUERIES) + offset + 1))
+        written.append(path.name)
+
     # Delete pages left over from an earlier run. Without this, a query that has not yet
     # re-run keeps its stale page — and a page carrying numbers from superseded code is
     # worse than a missing one, because it looks like current evidence and gets submitted.
-    for stale in out_dir.glob("q[0-9][0-9].md"):
+    stale_pages = list(out_dir.glob("q[0-9][0-9].md")) + list(out_dir.glob("ev-[0-9][0-9]-*.md"))
+    for stale in stale_pages:
         if stale.name not in written:
             stale.unlink()
 

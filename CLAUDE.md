@@ -74,6 +74,28 @@ Background reading:
   from the prose; the obvious repairs corrupt the very facts the answer exists to quote. Never
   add a `".x"` → `". x"` rule — it turns `part-0007.parquet` into `part-0007. parquet`. Test
   any cleanup against file paths, error messages and timestamps before shipping it.
+- **A registered node is not a running node.** AgentField registers with the control plane
+  *before* it binds its socket, so a node that dies on startup still shows up in the fleet.
+  Two ways that bit us, both now guarded by `tests/unit/test_agent_runtime.py`:
+  `Agent.run()` defaults **every** node to port **8001**, so `make agents` had four of five
+  die on "address already in use"; and a node must register a `callback_url` the control
+  plane can actually dial — it runs in Docker, where `localhost` is the *container*, so
+  `AGENT_CALLBACK_HOST` defaults to `host.docker.internal`. Never trust the node list —
+  run `make agents-status`, which asks each port directly.
+- **`/api/v1/nodes` is not the list of routable nodes.** It shows only nodes whose
+  `health_status` is `active`. A node that registered while its port was still binding is
+  stuck at `unknown` forever — and the control plane routes to it perfectly well. Judging
+  health by `/nodes` condemns four working agents. Use `/api/v1/discovery/capabilities`.
+- **The control plane kills any execution at 90s by default**, which every `coordinator.ask`
+  blows through on CPU inference (routing alone is ~30–100s). Raised in
+  `deploy/agentfield.yaml` under `agentfield.execution_queue.*`. **A key at the wrong nesting
+  is silently ignored** — no warning, it just does nothing. The canonical schema is on the
+  host at `~/.agentfield/config/agentfield.yaml`.
+- **A cross-agent call through the control plane was never exercised by the test suite.** The
+  QA suite runs the coordinator with *in-process* specialists, so `agents/coordinator.py`'s
+  `RemoteSpecialist` — the actual graded multi-agent path — had a latent 422 for months. If
+  you change that path, you must test it against a running control plane; `make test` cannot
+  see it.
 
 ## Non-negotiable design rules
 
@@ -113,7 +135,11 @@ or the Microsoft Agent Framework (the proposal deliberately replaced them with A
 - `@app.skill()` — deterministic functions (API calls, data manipulation)
 - `@app.reasoner()` — non-deterministic, LLM-driven logic
 - `await app.ai(system=..., user=..., schema=PydanticModel)` — structured LLM call
-- `await app.call("node_id.reasoner_name", input={...})` — agent-to-agent call via control plane (traced as a DAG)
+- `await app.call("node_id.reasoner_name", query="...")` — agent-to-agent call via control plane
+  (traced as a DAG). The target reasoner's parameters are passed as **keyword arguments**.
+  There is no `input={...}` envelope — that is the shape of the REST execute API, not of the
+  SDK call. Passing `input={"query": q}` sends a parameter literally named `input` and leaves
+  the specialist's `query` unset: `agent error (422): Missing required field: query`.
 - `await app.memory.set(scope, key, obj)` / `.get(scope, key)` — scopes: `global`, `agent`, `session`, `run`
 - `await app.memory.set_vector(chunk_id, embedding, metadata=...)` — vector storage
 - `await app.memory.similarity_search(query_embedding, top_k=...)` — semantic search (returns key/score/text)

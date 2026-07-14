@@ -12,7 +12,7 @@ Routes with an LLM, dispatches to the specialists through the control plane via
 
 from __future__ import annotations
 
-from agents._runtime import make_agent
+from agents._runtime import make_agent, serve
 from psiog_kendra.config import settings
 from psiog_kendra.coordinator import Coordinator
 from psiog_kendra.domains import agent_for
@@ -50,7 +50,11 @@ class RemoteSpecialist:
         self.node_id = agent_for(domain)
 
     async def answer(self, query: str) -> AgentResponse:
-        result = await app.call(f"{self.node_id}.{REASONER[self.node_id]}", input={"query": query})
+        # `app.call()` takes the target reasoner's parameters as KEYWORD ARGUMENTS. It does
+        # not take an `input=` envelope -- that is the shape of the REST execute API, not of
+        # the SDK call, and passing it sends a parameter literally named "input", leaving the
+        # specialist's own `query` unset: `agent error (422): Missing required field: query`.
+        result = await app.call(f"{self.node_id}.{REASONER[self.node_id]}", query=query)
         # Re-validate: a specialist's reply is untrusted input to the coordinator.
         return AgentResponse.model_validate(result)
 
@@ -73,4 +77,4 @@ async def ask(query: str) -> CopilotResponse:
 
 
 if __name__ == "__main__":
-    app.run()
+    serve(app)

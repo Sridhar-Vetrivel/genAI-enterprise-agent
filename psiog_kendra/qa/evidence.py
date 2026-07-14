@@ -29,13 +29,13 @@ DOMAIN_TO_DELIVERABLE = {
 
 
 def evidence_id(index: int) -> str:
-    """E-01, E-02, ... — the key the mid-term template's Section 4.1 index is built on.
+    """EV-01, EV-02, ... — the key the mid-term template's Section 4.1 index is built on.
 
     Section 3 requires every deliverable marked Done or Partial to point at one of these,
     and the evaluator cross-checks that link. A page without an Evidence ID cannot be
     referenced, so it cannot support a claim.
     """
-    return f"E-{index:02d}"
+    return f"EV-{index:02d}"
 
 
 def _deliverables(domains: list[str]) -> list[str]:
@@ -585,7 +585,7 @@ def build_evidence() -> tuple[int, list[str]]:
     # Delete pages left over from an earlier run. Without this, a query that has not yet
     # re-run keeps its stale page — and a page carrying numbers from superseded code is
     # worse than a missing one, because it looks like current evidence and gets submitted.
-    stale_pages = list(out_dir.glob("q[0-9][0-9].md")) + list(out_dir.glob("e-[0-9][0-9]-*.md"))
+    stale_pages = list(out_dir.glob("q[0-9][0-9].md")) + list(out_dir.glob("ev-[0-9][0-9]-*.md"))
     for stale in stale_pages:
         if stale.name not in written:
             stale.unlink()

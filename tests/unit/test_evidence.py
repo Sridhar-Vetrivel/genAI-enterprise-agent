@@ -188,16 +188,16 @@ class TestEvidenceIds:
 
     def test_a_query_page_carries_its_evidence_id(self) -> None:
         page = render_query(result(qid=7))
-        assert "E-07" in page
+        assert "EV-07" in page
 
     def test_the_evidence_id_is_in_the_pasteable_header_table(self) -> None:
         page = render_query(result(qid=3))
-        assert "| Evidence ID | E-03 |" in page
+        assert "| Evidence ID | EV-03 |" in page
 
     def test_ids_are_zero_padded_and_sequential(self) -> None:
-        assert evidence_id(1) == "E-01"
-        assert evidence_id(12) == "E-12"
-        assert evidence_id(16) == "E-16"
+        assert evidence_id(1) == "EV-01"
+        assert evidence_id(12) == "EV-12"
+        assert evidence_id(16) == "EV-16"
 
 
 class TestArtefactPages:
@@ -219,7 +219,7 @@ class TestArtefactPages:
 
     def test_an_artefact_page_carries_its_evidence_id_and_screenshot_steps(self) -> None:
         page = render_artefact(ARTEFACTS[0], 13)
-        assert "E-13" in page
+        assert "EV-13" in page
         assert "📸" in page
         assert ARTEFACTS[0].command in page
 
@@ -242,16 +242,16 @@ class TestArtefactPages:
         index = render_index(report)
         assert "Section 4.1" in index
         assert "| Evidence ID | Caption (what it proves) | Deliverable ID |" in index
-        assert "| E-01 |" in index
+        assert "| EV-01 |" in index
 
     def test_the_index_only_lists_evidence_that_exists(self) -> None:
         # A row for a query that has not run would be a claim with no page behind it.
         report = QAReport([QueryResult(**_qr())]).to_dict()  # only Q1
         rows = evidence_rows(report)
         ids = [r[0] for r in rows]
-        assert "E-01" in ids
-        assert "E-02" not in ids  # Q2 has not run
-        assert "E-13" in ids  # artefacts are always available to capture
+        assert "EV-01" in ids
+        assert "EV-02" not in ids  # Q2 has not run
+        assert "EV-13" in ids  # artefacts are always available to capture
 
 
 class TestBuildEvidenceArtefacts:
@@ -266,15 +266,15 @@ class TestBuildEvidenceArtefacts:
 
         _, written = build_evidence()
         assert "q01.md" in written
-        assert "e-13-qa-summary.md" in written
-        assert "e-16-control-plane.md" in written
+        assert "ev-13-qa-summary.md" in written
+        assert "ev-16-control-plane.md" in written
 
     def test_a_stale_artefact_page_is_deleted_too(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         out_dir = tmp_path / "qa"
         out_dir.mkdir()
-        stale = out_dir / "e-99-removed-artefact.md"
+        stale = out_dir / "ev-99-removed-artefact.md"
         stale.write_text("# an artefact that no longer exists")
 
         report_path = tmp_path / "qa_report.json"

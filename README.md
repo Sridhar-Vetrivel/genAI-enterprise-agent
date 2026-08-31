@@ -43,6 +43,9 @@ Prerequisites: Python 3.11+, [Ollama](https://ollama.com) running locally with
 RAM**; if it will not fit, the gateway degrades to `gemma3:1b` and says so (routing quality
 drops noticeably — free the RAM for real results).
 
+For the full multi-agent stack (control plane + 5 nodes + UI + cross-domain DAG traces) and a
+step-by-step demo script, see **[docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md)**.
+
 ```bash
 make test        # offline suite: no LLM, no network      (329 tests)
 make cov         # the same, with a coverage report        (93%)

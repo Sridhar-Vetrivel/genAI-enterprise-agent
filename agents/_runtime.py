@@ -6,8 +6,8 @@ without a running control plane.
 
 AgentField owns what AgentField is for: node registration, `@app.skill()` /
 `@app.reasoner()`, agent-to-agent calls through the control plane (traced as a DAG), and
-the vector-memory fabric. The LLM transport is the local Ollama gateway, because
-OpenRouter is not provisioned.
+the vector-memory fabric. The LLM transport is the local Ollama gateway: OpenRouter is not
+provisioned and will not be, so inference is local and permanent.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def make_agent(node_id: str, description: str, tags: list[str]) -> Agent:
         # on "connection refused" against the container's own empty port.
         callback_url=cfg.callback_url(node_id),
         # The model AgentField would use for its own `app.ai()` calls. Pointed at the
-        # local Ollama server: OpenRouter is not provisioned, so nothing leaves the host.
+        # local Ollama server: inference is local and permanent, so nothing leaves the host.
         ai_config=AIConfig(
             model=f"ollama/{cfg.model_complex}",
             api_base=cfg.ollama_host,

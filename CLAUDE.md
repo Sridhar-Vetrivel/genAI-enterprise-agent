@@ -18,7 +18,7 @@ framework:
 
 | Agent | Domain | Data Source |
 |---|---|---|
-| `coordinator` | LLM intent classification, routing, cross-domain synthesis | LLM via OpenRouter |
+| `coordinator` | LLM intent classification, routing, cross-domain synthesis | Local LLM via Ollama (Gemma 3) |
 | `data-agent` | Data platform | Databricks REST API (Jobs, SQL Warehouses) |
 | `devops-agent` | CI/CD | GitHub Actions / Azure DevOps REST API |
 | `crm-agent` | Customer data | CRM REST API (HubSpot free tier / mock) |
@@ -111,18 +111,19 @@ These come from the RFP and the use case. Do not violate them — they are the g
 4. **Structured output everywhere.** Every LLM call returns a Pydantic model with
    `model_config = ConfigDict(extra="forbid")`. Responses must be machine-verifiable for QA.
 5. **Live (or realistic mock) data only.** No read-only demo faking results.
-6. **Stay within ₹2,500.** Every tool is open-source/self-hosted or free-tier. LLM inference
-   via OpenRouter is the sole budgeted cost; Ollama + Llama 4 Scout is the zero-cost local fallback.
+6. **Stay within ₹2,500.** Every tool is open-source/self-hosted or free-tier. Inference runs
+   entirely on the local Ollama model at **₹0** — OpenRouter (the proposal's budgeted line) is
+   not provisioned and will not be, so actual spend is ₹0 against the ₹2,500 ceiling.
 7. **Capstone demo uses mock/synthetic data only** — no real customer records or internal
    data is ever sent to an external LLM. (See solution-proposal.md § 7.)
 
 ## Tech stack
 
 - **Orchestration:** AgentField (self-hosted via Docker Compose) — agents, vector memory, DAG tracing
-- **LLM inference:** **Currently OpenRouter is NOT provisioned — use the zero-cost local Ollama model for every LLM call.** The available local model is `ollama/gemma3:4b` (default; `ollama/gemma3:1b` as an ultra-fast fallback), served on `http://localhost:11434`. OpenRouter (`google/gemini-2.5-flash`) remains the intended primary once provisioned. Model is swappable via the `AI_MODEL` env var — no code changes.
-  - ⚠️ Note: the approved proposal named **Llama 4 Scout** as the local model, but the machine actually has **Gemma 3** (`gemma3:4b`, `gemma3:1b`) installed — record this as a deviation in the mid-term doc (Section 8).
+- **LLM inference:** **OpenRouter is NOT provisioned and will not be — every LLM call runs on the local Ollama model, permanently, at ₹0.** This is a settled scope decision for the POC, not a temporary gap. The local model is `ollama/gemma3:4b` (default; `ollama/gemma3:1b` as an ultra-fast tier for simple lookups), served on `http://localhost:11434`. The model is still swappable via the `AI_MODEL` env var with no code changes, so a hosted endpoint (`google/gemini-2.5-flash`) remains a one-line change should that ever be revisited — but nothing in this build assumes it.
+  - ⚠️ Note: the approved proposal named **Llama 4 Scout** as the local model, but the machine actually has **Gemma 3** (`gemma3:4b`, `gemma3:1b`) installed — recorded as a deviation in [Implementation.md](Implementation.md).
 - **Structured output:** Pydantic (`extra="forbid"`)
-- **Hosting:** Azure B1s VM (12-month free tier), Docker Compose
+- **Hosting:** local **Docker Compose** (the POC deployment target). Azure B1s hosting is descoped — see [Implementation.md](Implementation.md).
 - **QA:** Pytest, GitHub Actions CI, and an LLM Judge Agent for hallucination detection
 - **Language:** Python 3.11+, async/await for all I/O
 
@@ -211,5 +212,5 @@ name only. Write the message body to explain *why* the change was made.
 
 - Don't hand-edit `docs/*.docx` or `docs/*.pptx` — regenerate from the markdown sources.
 - Don't introduce LangChain / MS Agent Framework — the design uses AgentField exclusively.
-- Don't add paid dependencies. If a free tier is at risk, fall back to Ollama (₹0).
+- Don't add paid dependencies. Inference is local Ollama (₹0); keep it that way.
 - Don't route on keywords or answer from model knowledge — grounding and LLM routing are graded.

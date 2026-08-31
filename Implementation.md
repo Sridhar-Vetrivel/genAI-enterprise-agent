@@ -45,13 +45,30 @@ judge belongs in the QA layer at all:
 | 6 | The judge filed one claim as **both grounded and ungrounded** | A self-contradiction, scored as a hallucination. |
 | 7 | An answer naming 3 CRM accounts **cited only 1** | Two-thirds of the claims uncited, in the one place where citing across systems *is* the deliverable. |
 
-### Latency: the cost of running the fallback as the primary
+### Scope decision (post-mid-term): local inference is permanent
 
-**Every number in this build was produced on the zero-cost fallback, not the approved
-primary.** The proposal names OpenRouter (`google/gemini-2.5-flash`) as the inference
-provider; it is not provisioned, so all inference runs on `gemma3:4b` under Ollama, on CPU,
-with no GPU. The functional result is unaffected — routing, grounding and citations are all
-correct — but the latency is not comparable:
+**OpenRouter will not be provisioned. Local Ollama/Gemma 3 is the permanent inference layer
+for this POC** — a settled decision, not a temporary gap. Every number in this build was
+produced on `gemma3:4b` under Ollama, on CPU, with no GPU, and that is the configuration the
+POC ships in. The functional result is what matters and it is correct: routing 100%, every
+answer grounded and cited, hallucination rate 3.64%. The only cost is latency (below), which
+is a property of CPU inference, not of the architecture.
+
+Two items from the original Weeks 11–17 roadmap are **descoped** as a direct consequence:
+
+- **OpenRouter provisioning** — cancelled. Inference stays local at ₹0.
+- **Azure B1s hosting** — descoped. The POC's deployment target is local **Docker Compose**;
+  the stack runs identically to how it would on the VM, so nothing about the architecture is
+  left unproven. Azure remains an *optional* future step, not a POC deliverable.
+
+`AI_MODEL_COMPLEX` is still an env var, so a hosted endpoint is a one-line change if this is
+ever revisited — but nothing in the build depends on one.
+
+### Latency: the cost of CPU inference
+
+The latency below is the price of running a 4B model on CPU with no GPU. It is a deployment
+property, not a design flaw — the same architecture on any faster endpoint returns in
+single-digit minutes.
 
 | Query type | LLM calls | Measured (local `gemma3:4b`, CPU) |
 |---|---|---|
@@ -61,21 +78,17 @@ correct — but the latency is not comparable:
 
 A cross-domain query is slow because the calls are inherently sequential — the coordinator
 cannot synthesise until every specialist has answered, and the judge cannot grade until the
-answer exists. On a hosted endpoint each of those calls is sub-second rather than minutes,
-so **the same run would complete in single-digit minutes, and answer quality would improve
-too**: `gemini-2.5-flash` would not need the leak-stripping and citation-repair scaffolding
-that `gemma3:4b` requires (see the seven defects above — most are small-model artefacts, not
-architectural flaws).
-
-This is a **deployment constraint, not a design one**. `AI_MODEL_COMPLEX` is an env var: the
-day OpenRouter is provisioned, the model swaps with no code change, and the architecture,
-the routing logic and the grounding contract are all unchanged. Worth stating explicitly in
-the mid-term § 8 so the demo's response time is not read as an architectural weakness.
+answer exists. On any faster endpoint each of those calls is sub-second rather than minutes,
+so the same run would complete in single-digit minutes. It is a **deployment property, not a
+design one**: the architecture, the routing logic and the grounding contract are identical
+regardless of which model serves the calls. Worth stating explicitly so the demo's response
+time is not read as an architectural weakness.
 
 **Deviations from the approved proposal** (record these in the mid-term doc, § 8):
 
-1. **OpenRouter is not provisioned** — all inference runs on local Ollama at ₹0. This is the
-   single biggest deviation, and it is what makes the demo slow (see the latency table
+1. **Inference is 100% local Ollama, permanently, at ₹0** — OpenRouter (the proposal's
+   budgeted primary) is not provisioned and will not be. This is a settled scope decision,
+   the single biggest deviation, and it is what makes the demo slow (see the latency table
    above). Everything else follows from it.
 2. **The local model is Gemma 3, not Llama 4 Scout** — `gemma3:4b` for hard cases (routing,
    synthesis, judging), `gemma3:1b` for simple ones. Embeddings need a separate model
@@ -310,8 +323,9 @@ activity that must pass before moving on. Weeks map 1:1 to the proposal timeline
 
 #### Week 4 — Environment & scaffolding
 
-- **Tasks:** Provision Azure B1s VM (free tier). Bring up the AgentField control plane via
-  `deploy/docker-compose.yml`. Connect OpenRouter; verify a round-trip `app.ai(...)` call.
+- **Tasks:** Bring up the AgentField control plane via `deploy/docker-compose.yml`; verify a
+  round-trip `app.ai(...)` call against the local Ollama model. (Azure VM + OpenRouter from the
+  original plan are descoped — see the Phase 2 scope note.)
   Stand up the repo skeleton (`agents/`, `schemas/`, `qa/`, `tests/`, `data/`, `deploy/`).
 - **Produces:** `deploy/docker-compose.yml`, `deploy/.env.example`, `pyproject.toml` (ruff +
   deps), `Makefile` (`fmt`/`lint`/`test`/`up`/`down`), `schemas/models.py` scaffold.
@@ -372,6 +386,17 @@ activity that must pass before moving on. Weeks map 1:1 to the proposal timeline
 
 ### Phase 2 — Cross-domain, QA & Deployment (Weeks 11–17)
 
+> **Scope decision (post-mid-term).** Two things named below are **descoped** for the POC and
+> are retained here only for traceability against the original plan:
+> - **OpenRouter provisioning** — cancelled; inference stays local (Ollama/Gemma 3) at ₹0.
+> - **Azure B1s hosting (Week 14)** — descoped; the deployment target is local **Docker
+>   Compose**, which runs the stack identically. Azure is an optional future step, not a POC
+>   deliverable.
+>
+> Everything else in Phase 2 (cross-domain orchestration, the Judge Agent, QA hardening, the
+> demo) is delivered against the **local** stack. Where a week below says "on Azure", read
+> "via local Docker Compose".
+
 #### Week 11 — Cross-domain orchestration
 
 - **Tasks:** Coordinator dispatches multiple specialists **in parallel** and synthesizes one
@@ -396,12 +421,13 @@ activity that must pass before moving on. Weeks map 1:1 to the proposal timeline
 - **QA gate:** Judge produces an automated grounding report per run; hallucination rate
   computed across all 12 queries.
 
-#### Week 14 — Azure deployment
+#### Week 14 — Deployment (~~Azure~~ → local Docker Compose) — **descoped to local**
 
-- **Tasks:** Deploy the full system (control plane + all agents) on the Azure B1s VM via Docker
-  Compose. Connect all agents end-to-end in the cloud environment.
-- **Produces:** Deployed stack; documented deploy runbook in `deploy/`.
-- **QA gate:** E2E test harness hits the deployed system and all 12 queries return cited answers.
+- **Tasks:** Bring up the full system (control plane + all 5 agents) via `deploy/docker-compose.yml`
+  and `make up && make agents`. (Azure B1s hosting is descoped — see the scope note above.)
+- **Produces:** Running local stack; deploy runbook in `deploy/` and `README.md`.
+- **QA gate:** E2E harness hits the running system and all 12 queries return cited answers —
+  achieved: see `docs/qa/traces.md` (12/12 through the control plane).
 
 #### Week 15 — QA hardening
 
@@ -419,10 +445,10 @@ activity that must pass before moving on. Weeks map 1:1 to the proposal timeline
 
 #### Week 17 — 🔵 FINAL DEMO
 
-- **Exit criteria:** Complete copilot live on Azure across 4 domains; **all 12** queries
-  passing with correct routing, grounded responses, and citations; hallucination rate
-  documented (**<10%**); routing accuracy **100%**; QA coverage **≥80%**; Judge Agent reports;
-  recorded live demo; all evidence on Moodle.
+- **Exit criteria:** Complete copilot running locally (Docker Compose) across 4 domains; **all
+  12** queries passing with correct routing, grounded responses, and citations; hallucination
+  rate documented (**<10%**); routing accuracy **100%**; QA coverage **≥80%**; Judge Agent
+  reports; recorded live demo; all evidence on Moodle.
 
 ### Critical path & dependencies
 
@@ -446,7 +472,7 @@ activity that must pass before moving on. Weeks map 1:1 to the proposal timeline
 - [ ] Mid-term documentation on Moodle
 
 **Week 17 final**
-- [ ] Complete copilot deployed on Azure
+- [ ] Complete copilot running locally (Docker Compose) — Azure hosting descoped
 - [ ] All 12 queries passing: correct routing, grounded, cited
 - [ ] Hallucination rate documented and measured (<10%)
 - [ ] Routing accuracy 100% on the 12 queries
@@ -461,9 +487,9 @@ activity that must pass before moving on. Weeks map 1:1 to the proposal timeline
 | Var | Purpose | Example |
 |---|---|---|
 | `AGENTFIELD_SERVER` | Control-plane URL | `http://localhost:8080` |
-| `AI_MODEL` | LLM model (swap primary/fallback with no code change). **Use the local Ollama model now — OpenRouter is not yet provisioned.** | `ollama/gemma3:4b` (current default) · `ollama/gemma3:1b` (fast fallback) · `google/gemini-2.5-flash` (once OpenRouter is live) |
-| `OLLAMA_HOST` | Local Ollama server (current inference path) | `http://localhost:11434` |
-| `OPENROUTER_API_KEY` | OpenRouter inference — **not provisioned yet; leave unset until available** | — |
+| `AI_MODEL_COMPLEX` / `AI_MODEL_SIMPLE` | Local LLM tiers (the permanent inference path). Swappable with no code change if a hosted model is ever revisited. | `gemma3:4b` (hard: routing, synthesis, judge) · `gemma3:1b` (simple lookups) |
+| `OLLAMA_HOST` | Local Ollama server (the inference path) | `http://localhost:11434` |
+| `OPENROUTER_API_KEY` | **Descoped — OpenRouter is not provisioned and will not be. Leave unset.** | — |
 | `DATABRICKS_HOST` / `DATABRICKS_TOKEN` | Databricks REST API | — |
 | `GITHUB_TOKEN` / `AZDO_TOKEN` | DevOps REST API | — |
 | `CRM_API_KEY` | CRM REST API (or unset → mock) | — |

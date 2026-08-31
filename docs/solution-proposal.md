@@ -8,6 +8,25 @@
 
 ---
 
+> ### 📌 Post-approval scope decision (recorded after the mid-term)
+>
+> This proposal is preserved as approved. Two decisions taken during the build supersede
+> specific choices below and are the source of truth going forward:
+>
+> - **Inference is 100% local (Ollama / Gemma 3), permanently, at ₹0.** OpenRouter
+>   (`google/gemini-2.5-flash`), named here as the primary provider, **is not provisioned and
+>   will not be.** Model selection is still an env var, so a hosted endpoint remains a one-line
+>   change, but the POC is built and delivered on the local model. Actual spend: **₹0** against
+>   the ₹2,500 ceiling.
+> - **Hosting is local Docker Compose; the Azure B1s VM is descoped** for the POC. The stack
+>   runs identically under Compose, so nothing is left architecturally unproven.
+>
+> Everything else in this proposal stands. See [../Implementation.md](../Implementation.md)
+> ("Scope decision") for the full rationale and the measured results (routing 100%,
+> hallucination 3.64%, coverage 93%).
+
+---
+
 ## Table of Contents
 
 1. [Problem Understanding](#1-problem-understanding)

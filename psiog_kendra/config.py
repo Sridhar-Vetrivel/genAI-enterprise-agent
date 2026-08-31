@@ -4,8 +4,9 @@ Nothing in this codebase hardcodes a URL, endpoint path, model name, agent node 
 file path, limit or threshold. It all lands here, is read from the environment, and is
 documented in deploy/.env.example. Copy that file to .env (gitignored) to override.
 
-OpenRouter is not provisioned, so every LLM call goes to the local Ollama server at zero
-cost. Switching to OpenRouter later is an env change, not a code change.
+Every LLM call goes to the local Ollama server at zero cost. OpenRouter is not provisioned
+and will not be -- local inference is the permanent design. Model selection stays an env
+value, so a hosted endpoint would be a config change (not a code change) if ever revisited.
 """
 
 from __future__ import annotations

@@ -41,8 +41,72 @@ from docx.text.paragraph import Paragraph
 
 TEMPLATE = Path("docs/pSiddhi3_0_FinalTerm_Submission_Template 1.docx")
 OUTPUT = Path("docs/S4-I-24_SridharVetrivel_FinalTermDoc.docx")
+IMAGES = Path("docs/images")
 
 GREY = "808080"  # the instruction text the checklist says to delete
+
+# --------------------------------------------------------------------------------------
+# Screenshots, per evidence block: ev -> (mode, [filenames under docs/images/])
+#
+# Every file here was opened and read before being mapped, because the filename is not
+# evidence of the content. Three traps that mapping by name alone would have walked into:
+#
+#   * Q07.png, Q09.png and Q10.png are the DEFECTIVE mid-term captures -- two are
+#     zero-citation `answer_docs_question` runs on docs-agent ("The indexed internal
+#     documentation does not cover this question.") and one is a single-specialist frame of
+#     a two-specialist query. They are exactly what EV-07/09/10 say they replaced, so they
+#     are NOT used; ev-07.png / ev-09-*.png / ev-10-*.png are the 03-Sep re-captures, and
+#     their execution ids match the ones cited in the blocks.
+#   * Q8.png and Q08.png are two captures of the SAME query. Q8.png is a specialist frame
+#     (`answer_docs_question` on docs-agent); Q08.png is the `ask` frame on coordinator with
+#     `domains_used: ["docs"]`. EV-08 is about ROUTING, so it needs Q08.png.
+#   * ev-14.png reads "415 passed" and ev-hallucination.png reads "3.64% / 10 of 12" -- the
+#     mid-term figures. They belong to EV-14 and EV-13, which are captioned as exactly those
+#     Week-10 interim measurements. Using either for EV-19/EV-20 would contradict Section 6.
+#
+# "carried" = the same image submitted at mid-term, re-pasted so this document reads
+# standalone; the carry-forward tick in the block's table still applies.
+# --------------------------------------------------------------------------------------
+
+EV_IMAGES: dict[str, tuple[str, list[str]]] = {
+    "EV-01": ("carried", ["Q01-Ev01.png"]),
+    "EV-02": ("carried", ["Q02.png"]),
+    "EV-03": ("carried", ["Q03-Ev03.png"]),
+    "EV-04": ("carried", ["Q04.png"]),
+    "EV-05": ("carried", ["Q05.png"]),
+    "EV-06": ("carried", ["Q06.png"]),
+    "EV-07": ("new", ["ev-07.png"]),
+    "EV-08": ("carried", ["Q08.png"]),
+    "EV-09": ("new", ["ev-09-flow.png", "ev-09-qa.png"]),
+    "EV-10": ("new", ["ev-10-flow.png", "ev-10-qa.png"]),
+    "EV-11": ("carried", ["Q11.png"]),
+    "EV-12": ("carried", ["Q12.png"]),
+    "EV-13": ("carried", ["ev-hallucination.png"]),
+    "EV-14": ("carried", ["ev-14.png"]),
+    "EV-15": ("carried", ["ev-15.png"]),
+    "EV-16": ("carried", ["Agents-Up-and-Running.png"]),
+    "EV-17": (
+        "carried",
+        [
+            "co-ordinator.png",
+            "data-agent-skills-and-reasoner.png",
+            "devops-agent-skills-and-reasoners.png",
+            "crm-agent-skills-and-reasoner.png",
+            "Docs-agent-skills-and-reasoner.png",
+        ],
+    ),
+    "EV-18": ("carried", ["Q12-Workflow-View.png"]),
+    # EV-19 .. EV-22 have no image yet. Their paste areas keep the instruction naming the
+    # exact command to run, because a graded figure must be captured from a real terminal --
+    # rendering the numbers into a picture here would be manufacturing evidence.
+}
+
+_SHOT_CARRIED = (
+    "Screenshot below — the same evidence submitted at Mid-Term as {ev}, re-pasted here so "
+    "this document reads standalone. The carry-forward reference in the table above still "
+    "applies."
+)
+_SHOT_NEW = "Screenshot below — captured for this submission:"
 
 # --------------------------------------------------------------------------------------
 # Section 1 — Participant & Project Identification (11 rows)
@@ -1527,20 +1591,31 @@ def main() -> int:
     # says to copy-paste a whole block to extend the numbering; this does exactly that.
     ev_ids = list(EV_BLOCKS)
     block_tables = tables[4:10]  # EV-01 .. EV-06
-    title_idx = [33, 36, 39, 42, 45, 48]
-    paste_idx = [34, 37, 40, 43, 46, 49]
 
+    # Resolve the six shipped blocks to Paragraph OBJECTS before mutating anything.
+    # Inserting a picture paragraph shifts every later paragraph index, so indices captured
+    # up front and used after the first insert would silently point at the wrong paragraph.
+    title_paras = [doc.paragraphs[i] for i in (33, 36, 39, 42, 45, 48)]
+    paste_paras = [doc.paragraphs[i] for i in (34, 37, 40, 43, 46, 49)]
+
+    section = doc.sections[0]
+    img_width = section.page_width - section.left_margin - section.right_margin
+
+    placed = 0
+    anchor = None
     for n in range(6):
         ev = ev_ids[n]
-        _set_para(doc.paragraphs[title_idx[n]], f"{ev}  —  {EV_BLOCKS[ev][0]}")
-        _set_para(doc.paragraphs[paste_idx[n]], EV_BLOCKS[ev][6])
-        _fill_block_table(block_tables[n], EV_BLOCKS[ev])
+        block = EV_BLOCKS[ev]
+        _set_para(title_paras[n], f"{ev}  —  {block[0]}")
+        _set_para(paste_paras[n], _shot_note(ev, block))
+        _fill_block_table(block_tables[n], block)
+        anchor, count = _add_images(paste_paras[n], ev, img_width)
+        placed += count
 
     # Clone EV-06's block (title para + table + paste para) for each of EV-07..EV-22.
-    anchor = doc.paragraphs[paste_idx[5]]._element
-    src_title = doc.paragraphs[title_idx[5]]
+    src_title = title_paras[5]
     src_table = block_tables[5]
-    src_paste = doc.paragraphs[paste_idx[5]]
+    src_paste = paste_paras[5]
 
     for ev in ev_ids[6:]:
         block = EV_BLOCKS[ev]
@@ -1563,7 +1638,10 @@ def main() -> int:
         new_paste = copy.deepcopy(src_paste._element)
         anchor.addnext(new_paste)
         anchor = new_paste
-        _set_para(Paragraph(new_paste, src_paste._parent), block[6])
+        paste = Paragraph(new_paste, src_paste._parent)
+        _set_para(paste, _shot_note(ev, block))
+        anchor, count = _add_images(paste, ev, img_width)
+        placed += count
 
     # ---- Section 12 checklist: tick every box -----------------------------------------
     # Only paragraph-level boxes are touched. Table-cell checkboxes (Track, Participation
@@ -1599,7 +1677,9 @@ def main() -> int:
     print(f"  evidence blocks : {len(EV_BLOCKS)} (EV-01 … EV-{len(EV_BLOCKS):02d})")
     print(f"  enhancements    : {len(ENHANCEMENTS)} (EN-01 … EN-{len(ENHANCEMENTS):02d})")
     print(f"  instruction text: {removed} grey italic paragraphs deleted")
-    print("  screenshots     : NOT embedded — each paste area names what to drop in")
+    print(f"  screenshots     : {placed} placed full-width across {len(EV_IMAGES)} blocks")
+    missing = [ev for ev in EV_BLOCKS if ev not in EV_IMAGES]
+    print(f"  awaiting capture: {', '.join(missing) if missing else 'none'}")
     return 0
 
 
@@ -1617,6 +1697,45 @@ def _note_after_table(table: Table, text: str) -> None:
         para = Paragraph(element, table._parent)
         run = para.add_run(block)
         run.font.size = Pt(9)
+
+
+def _shot_note(ev: str, block: tuple) -> str:
+    """The line that sits above an evidence block's screenshot(s).
+
+    Falls back to the block's own paste instruction when no image is mapped, so a block
+    without a screenshot still tells the reader exactly what to capture.
+    """
+    entry = EV_IMAGES.get(ev)
+    if entry is None:
+        return block[6]
+    mode, files = entry
+    note = _SHOT_NEW if mode == "new" else _SHOT_CARRIED.format(ev=ev)
+    if len(files) > 1:
+        note += f"  ({len(files)} images)"
+    return note
+
+
+def _add_images(para: Paragraph, ev: str, width) -> tuple:
+    """Insert one full-width picture paragraph per mapped image, after `para`.
+
+    Returns the last element written and how many pictures were placed, so the caller can
+    keep cloning after the images rather than in the middle of them.
+    """
+    entry = EV_IMAGES.get(ev)
+    if entry is None:
+        return para._element, 0
+
+    anchor = para._element
+    for name in entry[1]:
+        path = IMAGES / name
+        if not path.exists():
+            raise FileNotFoundError(f"{ev}: image not found: {path}")
+        element = OxmlElement("w:p")
+        anchor.addnext(element)
+        anchor = element
+        run = Paragraph(element, para._parent).add_run()
+        run.add_picture(str(path), width=width)
+    return anchor, len(entry[1])
 
 
 def _clear_para(para: Paragraph) -> None:

@@ -61,7 +61,8 @@ PARTICIPANT = [
     "S4-I-24_SridharVetrivel_MidTermDoc.docx",
     "«TICK ONE FROM THE L&D MID-TERM FEEDBACK RECORD»\n"
     "☐ On track      ☐ At risk — actions were assigned      ☐ Other: ______",
-    "Week 17 — «DD-MMM-26 to DD-MMM-26 — L&D to confirm before circulation»",
+    "Week 17 — 31-Aug-2026 to 04-Sep-2026 (derived from the Week 10 window of 13-Jul-2026 to "
+    "17-Jul-2026 recorded in the Mid-Term document; L&D to confirm)",
 ]
 
 # --------------------------------------------------------------------------------------
@@ -69,7 +70,8 @@ PARTICIPANT = [
 # --------------------------------------------------------------------------------------
 
 PROBLEM = (
-    "No change from the Mid-Term recap. Psiog's engineering, data and operations teams work "
+    "Unchanged from the approved proposal and the Mid-Term recap, restated in full here because "
+    "this document is an end-to-end record. Psiog's engineering, data and operations teams work "
     "across a fragmented estate — Databricks for pipelines, GitHub/Azure DevOps for deployments, "
     "a CRM for customer data, and runbooks scattered across wikis. Answering even a simple "
     "operational question — \"did last night's pipeline run?\" — means opening four or five tools "
@@ -172,7 +174,7 @@ DELIVERABLES = [
         "Y",
         "Done — exceeded: 12 of 12, every one grounded and cited, all re-verified end-to-end "
         "through the live control plane (not just in-process)",
-        "EV-01 … EV-12, EV-18, EV-20",
+        "EV-01 … EV-12, EV-18, EV-20  (mid-term interim: EV-13)",
     ),
     (
         "D-08",
@@ -187,9 +189,12 @@ DELIVERABLES = [
         "Cross-domain orchestration — parallel specialist dispatch and one synthesised, "
         "cross-cited answer",
         "Week 11",
-        "N",
-        "Done — all four cross-domain queries (Q09–Q12) route to multiple specialists and "
-        "synthesise a single cited answer; every hop traced as a DAG through the control plane",
+        "N — new row for a Week 11 deliverable, but note the work landed EARLY: the cross-domain "
+        "path was already working, traced and evidenced at Mid-Term under D-07",
+        "Done, ahead of its planned window — all four cross-domain queries (Q09–Q12) route to "
+        "multiple specialists and synthesise a single cited answer, every hop traced as a DAG "
+        "through the control plane. First traced 14-Jul-2026 (Week 10); Q07, Q09 and Q10 "
+        "re-traced 03-Sep-2026 for the corrected evidence blocks",
         "EV-09, EV-10, EV-11, EV-12, EV-18",
     ),
     (
@@ -197,8 +202,12 @@ DELIVERABLES = [
         "Full 12-query test suite + Judge Agent for hallucination detection",
         "Week 12–13",
         "N",
-        "Done — full 12-of-12 judged pass: 100% routing, 5.56% hallucination against a <10% target",
-        "EV-20",
+        "Done — the 12-query suite and the Judge Agent were both built in Week 10 (the Judge was "
+        "pulled forward because the mid-term Section 6 required the rate it measures; see Section "
+        "8). The FULL 12-of-12 judged pass completed on 03-Sep-2026 (Week 17): 100% routing, "
+        "5.56% hallucination against a <10% target. Mid-term reported the same measurement "
+        "honestly scoped to 10 of 12; that scope gap is what closed in Week 17",
+        "EV-20  (mid-term interim: EV-13)",
     ),
     (
         "D-11",
@@ -215,19 +224,25 @@ DELIVERABLES = [
         "QA hardening to ≥80% coverage + demo preparation",
         "Week 15–16",
         "N",
-        "Done — 93.11% coverage against the ≥80% full-programme target; CI hardened (Python "
-        "3.11 + 3.12 matrix, concurrency cancellation, coverage artefact, opt-in live-model job); "
-        "docs/DEMO_RUNBOOK.md is the demo script",
-        "EV-19, EV-21, EV-22",
+        "Done — 93.11% coverage against the ≥80% full-programme target (measured, EV-19). The CI "
+        "hardening (Python 3.11 + 3.12 matrix, concurrency cancellation, enforced coverage gate, "
+        "coverage artefact, opt-in live-model job) and docs/DEMO_RUNBOOK.md both landed on "
+        "03-Sep-2026 — Week 17, one week after the planned Week 15–16 window. Stated rather than "
+        "smoothed over: the artefacts are committed and verifiable by file, and the two "
+        "screenshots of them RUNNING (EV-21, EV-22) are captured in the review window, as noted "
+        "in Section 10",
+        "EV-19  (primary, already measured); EV-21, EV-22 (capture pending — see Section 10)",
     ),
     (
         "D-13",
         "Final demo, consolidated evidence pack and documentation submitted",
         "Week 17",
         "N",
-        "Done — this document, the 22-block evidence pack in Section 4, and a live end-to-end "
-        "walkthrough per docs/DEMO_RUNBOOK.md",
-        "EV-19 … EV-22",
+        "Done — this document and the consolidated 22-block evidence pack in Section 4, both "
+        "complete and submitted. The live end-to-end walkthrough is performed AT the review "
+        "session itself (that is the only time it can be), scripted by docs/DEMO_RUNBOOK.md and "
+        "planned in Section 5.1; its screenshot is EV-22",
+        "EV-19, EV-20  (already measured); EV-21, EV-22 (capture pending — see Section 10)",
     ),
 ]
 
@@ -252,13 +267,17 @@ SELF_ASSESSMENT = [
         "~95% of the approved scope.\n\n"
         "Defensible from the Section 3 table: of 13 deliverables, 11 are Done, 1 is Partial "
         "(D-01) and 1 is Not Started (D-11). Both exceptions trace to the SAME formally recorded "
-        "Phase 2 scope decision (Section 8): OpenRouter was not provisioned and the Azure B1s VM "
-        "was not provisioned, because the zero-cost local model meets every graded target and "
-        "Docker Compose is a complete deployment target for a POC. Excluding those two "
-        "infrastructure items, 12 of 12 remaining deliverables are Done and no graded capability "
-        "is left unproven. Counting them strictly as incomplete instead gives 11/13 = 85%; the "
-        "~95% figure reflects that they are a recorded decision rather than missed work, and it "
-        "is stated this way deliberately so the arithmetic is auditable either way.",
+        "Phase 2 scope decision (Section 8): neither OpenRouter nor the Azure B1s VM was "
+        "provisioned, because the zero-cost local model meets every graded target and Docker "
+        "Compose is a complete deployment target for a POC.\n\n"
+        "The arithmetic, stated both ways so it is auditable either way. Strictly, counting D-01 "
+        "as Partial and D-11 as incomplete: 11 of 13 = 85%. Reading it by clause instead: D-01 "
+        "has three clauses (control plane under Compose — DELIVERED; Azure VM — descoped; "
+        "OpenRouter — descoped), and D-11 is a single descoped clause, so 11 rows are fully "
+        "delivered, 1 row is delivered apart from two descoped clauses, and 1 row is descoped in "
+        "full. On that reading ~95% of the approved scope is delivered and no graded capability "
+        "is left unproven — every RFP target in the row above is measured and met. The ~95% "
+        "figure is the second reading; the 85% figure is the first. Neither is hidden.",
     ),
     (
         "midterm-percent",
@@ -342,8 +361,9 @@ EVIDENCE = [
     (
         "EV-07",
         "RE-CAPTURED. Q07 \"What is the runbook for a schema mismatch?\" routes to docs and answers "
-        "from the RAG index with 3 citations — the mid-term screenshot for this block showed a "
-        "pre-fix, zero-citation docs-agent run, so it is replaced rather than carried",
+        "from the RAG index, citing 3 retrieved sections on this control-plane run — the mid-term "
+        "screenshot for this block showed a pre-fix, zero-citation docs-agent run, so it is "
+        "replaced rather than carried",
         "D-02, D-04",
         "docs/qa/q07.md · docs/qa/traces.md · execution exec_20260903_181908_i4xiuaut",
         "No — re-captured (supersedes the defective Mid-Term EV-07 image)",
@@ -370,8 +390,8 @@ EVIDENCE = [
         "EV-10",
         "RE-CAPTURED. CROSS-DOMAIN — Q10 \"The ingestion job failed — is there a fix in the "
         "runbooks?\" routes to data-platform + docs and joins the live failure to the documented "
-        "recovery steps with 5 citations spanning both systems. The mid-term image showed a "
-        "single-specialist frame, so it is replaced rather than carried",
+        "recovery steps, citing 5 sources spanning both systems on this control-plane run. The "
+        "mid-term image showed a single-specialist frame, so it is replaced rather than carried",
         "D-02, D-03, D-04, D-07, D-09",
         "docs/qa/q10.md · docs/qa/traces.md · execution exec_20260903_183031_6f9v61d6",
         "No — re-captured (supersedes the defective Mid-Term EV-10 image)",
@@ -473,8 +493,8 @@ EVIDENCE = [
         "3.12, with the coverage gate enforced and the coverage.xml artefact uploaded — CI that "
         "reproduces the measurement, not just runs the tests",
         "D-12",
-        ".github/workflows/ci.yml · GitHub Actions run: «PASTE RUN URL»",
-        "No — new (Phase 2 enhancement, EN-04)",
+        ".github/workflows/ci.yml (committed) · GitHub Actions run: «PASTE RUN URL»",
+        "No — new; SCREENSHOT CAPTURE PENDING (review window). See Section 10",
     ),
     (
         "EV-22",
@@ -482,8 +502,8 @@ EVIDENCE = [
         "five nodes routable, a single-domain and a cross-domain query answered live with "
         "citations. Evidence that the demo plan in Section 5.1 actually runs",
         "D-12, D-13",
-        "docs/DEMO_RUNBOOK.md · http://localhost:8080/ui/",
-        "No — new (Phase 2)",
+        "docs/DEMO_RUNBOOK.md (committed) · http://localhost:8080/ui/",
+        "No — new; SCREENSHOT CAPTURE PENDING (performed at the review). See Section 10",
     ),
 ]
 
@@ -567,13 +587,16 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
     "EV-07": (
         "Q07 routes to docs and answers from the RAG index, citing the retrieved sections",
         "The docs agent retrieves from the vector index by semantic similarity and answers strictly "
-        "from the retrieved chunks, citing each document and section — 3 citations on this run. "
-        "RE-CAPTURED for this submission: the image pasted at mid-term showed a pre-fix run that "
-        "returned zero citations, so carrying it forward would have shown a defect the code no "
-        "longer has.",
+        "from the retrieved chunks, citing each document and section — 3 citations on THIS "
+        "control-plane run. (The in-process QA run of the same query in EV-20 records 5 "
+        "citations: retrieval returns the chunks it scores above threshold, so the count varies "
+        "by run. The two are separate executions, not a discrepancy.) RE-CAPTURED for this "
+        "submission: the image pasted at mid-term showed a pre-fix run that returned zero "
+        "citations, so carrying it forward would have shown a defect the code no longer has.",
         "D-02, D-04",
-        "Developed Week 7; re-captured through the live control plane 03-Sep-2026",
-        "docs/qa/q07.md · docs/qa/traces.md · execution exec_20260903_181908_i4xiuaut",
+        "Developed Week 7; re-captured through the live control plane 03-Sep-2026 (Week 17)",
+        "docs/qa/traces.md (records the execution id, durable in the repo) · docs/qa/q07.md · "
+        "control-plane execution exec_20260903_181908_i4xiuaut",
         "☑ No (new / progressed — supersedes the defective Mid-Term EV-07 image)      "
         "☐ Yes — same as Mid-Term EV-___",
         _paste(["AgentField UI → Executions → exec_20260903_181908_i4xiuaut "
@@ -598,8 +621,10 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "single-specialist frame of this query, which understated the very thing it was meant to "
         "prove.",
         "D-02, D-03, D-06, D-07, D-09",
-        "Developed Weeks 6–9, cross-domain path Week 11; re-captured 03-Sep-2026",
-        "docs/qa/q09.md · docs/qa/traces.md · execution exec_20260903_182225_ak7wxnxf",
+        "Specialists developed Weeks 6–9; cross-domain path delivered by Week 10 (ahead of its "
+        "planned Week 11 window) and first traced 14-Jul-2026; re-captured 03-Sep-2026",
+        "docs/qa/traces.md (records the execution id, durable in the repo) · docs/qa/q09.md · "
+        "control-plane execution exec_20260903_182225_ak7wxnxf",
         "☑ No (new / progressed — supersedes the defective Mid-Term EV-09 image)      "
         "☐ Yes — same as Mid-Term EV-___",
         _paste(["AgentField UI → Executions → exec_20260903_182225_ak7wxnxf "
@@ -612,8 +637,10 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "the Databricks record and the runbook. RE-CAPTURED for the same reason as EV-09: the "
         "mid-term image showed only one specialist on a two-specialist query.",
         "D-02, D-03, D-04, D-07, D-09",
-        "Developed Weeks 6–7, cross-domain path Week 11; re-captured 03-Sep-2026",
-        "docs/qa/q10.md · docs/qa/traces.md · execution exec_20260903_183031_6f9v61d6",
+        "Specialists developed Weeks 6–7; cross-domain path delivered by Week 10 (ahead of its "
+        "planned Week 11 window) and first traced 14-Jul-2026; re-captured 03-Sep-2026",
+        "docs/qa/traces.md (records the execution id, durable in the repo) · docs/qa/q10.md · "
+        "control-plane execution exec_20260903_183031_6f9v61d6",
         "☑ No (new / progressed — supersedes the defective Mid-Term EV-10 image)      "
         "☐ Yes — same as Mid-Term EV-___",
         _paste(["AgentField UI → Executions → exec_20260903_183031_6f9v61d6 "
@@ -625,8 +652,10 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "both systems: two GitHub Actions runs plus the quality-gates runbook and the "
         "ingestion-failure incident report.",
         "D-02, D-04, D-05, D-07, D-09",
-        "Developed Weeks 7–8, cross-domain path Week 11; verified 14-Jul-2026",
-        "docs/qa/q11.md · execution exec_20260714_145520_dxtvhyol",
+        "Specialists developed Weeks 7–8; cross-domain path delivered by Week 10 (ahead of its "
+        "planned Week 11 window); traced 14-Jul-2026",
+        "docs/qa/traces.md (records the execution id, durable in the repo) · docs/qa/q11.md · "
+        "control-plane execution exec_20260714_145520_dxtvhyol",
         "☐ No (new / progressed)      ☑ Yes — same as Mid-Term EV-11",
         _CARRY_NOTE.format(ev="EV-11"),
     ),
@@ -635,8 +664,10 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "The hardest query in the suite. One question, all four specialists, one synthesised answer "
         "citing across every system — pipelines, deployments, customer accounts and incident docs.",
         "D-02, D-03, D-04, D-05, D-06, D-07, D-09",
-        "Developed Weeks 5–9, cross-domain synthesis Week 11; verified 14-Jul-2026",
-        "docs/qa/q12.md · execution exec_20260714_150256_x4r81cqa",
+        "Specialists developed Weeks 5–9; four-domain synthesis delivered by Week 10 (ahead of "
+        "its planned Week 11 window); traced 14-Jul-2026",
+        "docs/qa/traces.md (records the execution id, durable in the repo) · docs/qa/q12.md · "
+        "control-plane execution exec_20260714_150256_x4r81cqa",
         "☐ No (new / progressed)      ☑ Yes — same as Mid-Term EV-12",
         _CARRY_NOTE.format(ev="EV-12"),
     ),
@@ -708,8 +739,9 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "with per-hop durations. Every agent-to-agent call goes through the control plane and is "
         "traced. This is the clearest single picture of the multi-agent design.",
         "D-01, D-02, D-07, D-09",
-        "Traced 14-Jul-2026",
-        "docs/qa/traces.md · execution exec_20260714_150256_x4r81cqa",
+        "Traced 14-Jul-2026 (Week 10)",
+        "docs/qa/traces.md (records every one of the 12 execution ids, durable in the repo) · "
+        "control-plane execution exec_20260714_150256_x4r81cqa",
         "☐ No (new / progressed)      ☑ Yes — same as Mid-Term EV-18",
         _CARRY_NOTE.format(ev="EV-18"),
     ),
@@ -752,10 +784,12 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "that installs Ollama, pulls gemma3:4b / gemma3:1b / nomic-embed-text and runs the "
         "real-model tests. Beyond the approved scope — see Section 9, EN-04.",
         "D-12",
-        "Built 03-Sep-2026; CI run «DATE OF THE GREEN RUN»",
-        ".github/workflows/ci.yml · GitHub Actions run: «PASTE RUN URL»",
-        "☑ No (new / progressed — Phase 2 enhancement)      "
-        "☐ Yes — same as Mid-Term EV-___",
+        "Workflow written and committed 03-Sep-2026 (Week 17); CI run «DATE OF THE GREEN RUN»",
+        ".github/workflows/ci.yml (committed and verifiable by file today) · GitHub Actions run: "
+        "«PASTE RUN URL»",
+        "☑ No — new (Phase 2 enhancement). SCREENSHOT CAPTURE PENDING: the workflow is committed, "
+        "but a green run can only exist once the branch is pushed, so this is captured in the "
+        "review window — see Section 10.      ☐ Yes — same as Mid-Term EV-___",
         _paste(["GitHub → Actions → the latest CI run on master: both matrix jobs "
                 "(3.11 and 3.12) green, coverage artefact listed"]),
     ),
@@ -767,9 +801,11 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "single-domain and a cross-domain query answered live with citations through "
         "coordinator.ask.",
         "D-12, D-13",
-        "Runbook written 03-Sep-2026; walkthrough dry run «DATE»",
-        "docs/DEMO_RUNBOOK.md · http://localhost:8080/ui/",
-        "☑ No (new / progressed — Phase 2)      ☐ Yes — same as Mid-Term EV-___",
+        "Runbook written and committed 03-Sep-2026 (Week 17); walkthrough performed «DATE»",
+        "docs/DEMO_RUNBOOK.md (committed and verifiable by file today) · http://localhost:8080/ui/",
+        "☑ No — new (Phase 2). SCREENSHOT CAPTURE PENDING: the runbook is committed, but the "
+        "walkthrough it scripts is performed at the review session itself — see Section 10.      "
+        "☐ Yes — same as Mid-Term EV-___",
         _paste(["Terminal: `make agents-status` showing all five nodes routable",
                 "AgentField UI → Executions → the live coordinator.ask run from the "
                 "walkthrough"]),
@@ -782,7 +818,11 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
 
 REPO_LINKS = [
     "https://github.com/Sridhar-Vetrivel/genAI-enterprise-agent",
-    "«FINAL SHORT SHA» — «DD-MMM-26»   (run: git log -1 --format='%h %ci' at submission time)",
+    "«FINAL SHORT SHA» — «DD-MMM-26»   (run: git log -1 --format='%h %ci' at submission time)\n"
+    "The final commit is on the `master` branch. IMPORTANT: `master` must be merged into the "
+    "repository's default branch before the review, so that the commit named here is what the "
+    "evaluator sees on opening the repository — otherwise the default branch view will trail the "
+    "submitted work.",
     "N/A — local Docker Compose is the FINAL deployment target for this POC (formally descoped "
     "from Azure B1s; see Section 8). The AgentField control plane and its UI serve at "
     "http://localhost:8080/ui/ and will be live on the demo machine throughout the Week 17 "
@@ -810,7 +850,9 @@ WALKTHROUGH = [
     "psiog_kendra/qa/judge.py  (the two-half Judge: LLM claim-grounding + deterministic "
     "fact-check)\n"
     "agents/health.py  (serving vs. routable fleet health)",
-    "master",
+    "`master` — the branch carrying the final commit and every file path listed above. It is "
+    "merged into the repository default branch before the review window, so either branch shows "
+    "the same tree; if the panel prefers, `master` can be checked out directly.",
     "Nothing from L&D — no credentials are needed, because the demo runs on synthetic fixtures by "
     "design (the approved proposal's own mock-data-only rule; Section 8). On the demo machine, "
     "already started and warmed per docs/DEMO_RUNBOOK.md: (1) Ollama serving gemma3:4b, gemma3:1b "
@@ -1251,11 +1293,31 @@ PENDING = [
         "control plane re-runs its migrations on every container start, so execution history does "
         "not survive a `docker compose down`. It affects only the trace VIEWER, never the graded "
         "results — every QA number lives in data/qa_report.json and every execution ID is recorded "
-        "in docs/qa/traces.md, both of which are durable files in the repository.",
+        "in docs/qa/traces.md, both of which are durable files in the repository. This is exactly "
+        "why every Section 4 evidence block names the repository artefact FIRST and the "
+        "control-plane execution id second: the pasted screenshot plus docs/qa/traces.md are the "
+        "durable record, and the live UI is a reproducible view of it rather than the source of "
+        "truth.",
         "N — a Phase 2 finding",
         "Mount the control plane's database path onto a named volume in deploy/docker-compose.yml, "
         "or run it in a persistent storage mode, so the DAG history is browsable across restarts. "
         "A deployment-configuration change, not an application one.",
+    ),
+    (
+        "Screenshot capture for EV-21 (CI green on GitHub Actions) and EV-22 (the live "
+        "walkthrough) — NOT a deliverable gap, an evidence-capture timing note",
+        "Both underlying artefacts are DONE and verifiable by file in the repository today: "
+        ".github/workflows/ci.yml carries the hardened workflow (Python 3.11 + 3.12 matrix, "
+        "enforced ≥80% coverage gate, coverage artefact, opt-in live-model job) and "
+        "docs/DEMO_RUNBOOK.md carries the demo script. What cannot exist yet is a SCREENSHOT of "
+        "each one running: a green Actions run requires the branch to be pushed, and the "
+        "walkthrough is by definition performed at the review session. Recorded here so that "
+        "Section 3's Done statuses for D-12 and D-13 are read correctly — each rests primarily on "
+        "already-measured evidence (EV-19, EV-20), with these two as confirming captures.",
+        "N — a Phase 2 note",
+        "Capture both inside the Week 17 review window: push the branch and screenshot the green "
+        "matrix run (EV-21), then walk docs/DEMO_RUNBOOK.md live and screenshot "
+        "`make agents-status` plus the resulting coordinator.ask execution (EV-22).",
     ),
 ]
 

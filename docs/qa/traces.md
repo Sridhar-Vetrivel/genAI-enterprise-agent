@@ -40,10 +40,10 @@ the in-process path the offline suite exercises.
 | Q04 | What was the last deployment date for the auth service? | `devops` | ✅ succeeded | 86.5s | `exec_20260714_141538_39ycscfa` |
 | Q05 | What is the current deal status for Acme Corp? | `crm` | ✅ succeeded | 89.8s | `exec_20260714_141715_68sxegi6` |
 | Q06 | Who is the account owner for TechStart Ltd? | `crm` | ✅ succeeded | 85.3s | `exec_20260714_141852_ebkaqo3h` |
-| Q07 | What is the runbook for when the ingestion pipeline throws a schema mismatch error? | `docs` | ✅ succeeded | 123.8s | `exec_20260714_144630_ebji8tdr` |
+| Q07 | What is the runbook for when the ingestion pipeline throws a schema mismatch error? | `docs` | ✅ succeeded | 181.2s | `exec_20260903_181908_i4xiuaut` |
 | Q08 | What does the architecture doc say about the ingestion pipeline? | `docs` | ✅ succeeded | 115.2s | `exec_20260714_144845_mo16pl3y` |
-| Q09 | Did last night's pipeline failure affect any CRM customer sync? | `crm, data-platform` | ✅ succeeded | 340.6s | `exec_20260714_142110_b9u0edtk` |
-| Q10 | The ingestion job failed - is there a fix in the runbooks? | `data-platform, docs` | ✅ succeeded | 239.8s | `exec_20260714_145055_3hvpsfti` |
+| Q09 | Did last night's pipeline failure affect any CRM customer sync? | `crm, data-platform` | ✅ succeeded | 444.7s | `exec_20260903_182225_ak7wxnxf` |
+| Q10 | The ingestion job failed - is there a fix in the runbooks? | `data-platform, docs` | ✅ succeeded | 506.9s | `exec_20260903_183031_6f9v61d6` |
 | Q11 | What's the status of the latest deployment and are there any known issues? | `devops, docs` | ✅ succeeded | 409.5s | `exec_20260714_145520_dxtvhyol` |
 | Q12 | Give me a full status update - pipeline, deployments, and any open incidents | `crm, data-platform, devops, docs` | ✅ succeeded | 703.6s | `exec_20260714_150256_x4r81cqa` |
 
@@ -124,15 +124,14 @@ The account owner for TechStart Ltd is Karthik Rao. This information is availabl
 
 ### Q07 — What is the runbook for when the ingestion pipeline throws a schema mismatch error?
 
-- **Execution ID:** `exec_20260714_144630_ebji8tdr`
-- **Run ID:** `run_20260714_144630_1l16bvq9`
+- **Execution ID:** `exec_20260903_181908_i4xiuaut`
+- **Run ID:** `run_20260903_181908_252dbkyd`
 - **Routed to:** `docs` (expected `docs`)
 
-If the `deploy-ingestion` pipeline fails its integration-test gate due to a schema contract mismatch, first check whether the corresponding ingestion job is also failing. If so, re-run the `deploy-ingestion` pipeline (run 5530) and investigate the cause, which is often an upstream producer changing a column type without schema review. If re-running fails a second time, escalate to the Data Platform on-call and page the schema owner. Do not loosen the column type to unblock the pipeline, as this corrupts the silver layer silently.
+If the `deploy-ingestion` pipeline fails its integration-test gate for a schema contract, check whether the corresponding ingestion job is also failing. The failure often indicates a disagreement between the service and the data platform regarding a column type, frequently related to the `customer_tier` column. If re-running job 4822 fails a second time, escalate to the Data Platform on-call and page the schema owner.
 
 **Citations**
 
-- incident-2026-07-12-ingestion-failure.md § Known Issues
 - runbook-12-schema-mismatch.md § Cause
 - runbook-05-deployment-quality-gates.md § When a Gate Fails
 - runbook-12-schema-mismatch.md § Escalation
@@ -153,32 +152,32 @@ The ingestion pipeline lands raw product and sales events into the Databricks la
 
 ### Q09 — Did last night's pipeline failure affect any CRM customer sync?
 
-- **Execution ID:** `exec_20260714_142110_b9u0edtk`
-- **Run ID:** `run_20260714_142110_pbdra5be`
+- **Execution ID:** `exec_20260903_182225_ak7wxnxf`
+- **Run ID:** `run_20260903_182225_hjjvffnp`
 - **Routed to:** `crm, data-platform` (expected `crm, data-platform`)
 
-Last night’s pipeline failure, specifically run #99163 of the `crm_sync` job, resulted in a synchronization issue for CRM customer accounts. The `crm_sync` job failed because the source table `bronze.raw_events` hadn’t been refreshed by job #4822, leading to 0 rows being synced. Consequently, two CRM accounts, Acme Corp (ACC-1001) and TechStart Ltd (ACC-1002), experienced stale sync statuses.
+Yesterday’s pipeline failure impacted a CRM customer sync. The `crm_sync` job run #99163 terminated with an error indicating that the bronze.raw_events table was not refreshed by job 4822 (ingestion_raw_events), resulting in zero rows synced to CRM. Consequently, the remains at the Negotiation stage, owned by Divya Raman.
 
 **Citations**
 
 - Databricks Job #4830 (crm_sync) run #99163
 - CRM account ACC-1001 (Acme Corp)
-- CRM account ACC-1002 (TechStart Ltd)
 
 ### Q10 — The ingestion job failed - is there a fix in the runbooks?
 
-- **Execution ID:** `exec_20260714_145055_3hvpsfti`
-- **Run ID:** `run_20260714_145055_vksib5t7`
+- **Execution ID:** `exec_20260903_183031_6f9v61d6`
+- **Run ID:** `run_20260903_183031_2bp0qc8t`
 - **Routed to:** `data-platform, docs` (expected `data-platform, docs`)
 
-The ingestion job ‘ingestion_raw_events’ failed on 2026-07-12 due to a SchemaMismatchException related to an integer value in a source file. To resolve this, follow the steps outlined in Runbook 12, which involves identifying the problematic file in the `s3://psiog-raw/events/<date>/` prefix and moving it to the quarantine location `s3://psiog-raw/quarantine/<date>/`. After re-running job 4822 from the Databricks Jobs UI, which will skip the quarantined partition, manually re-run job 4830 to refresh the CRM, and notify the producer team to correct the emitter and re-publish the partition.
+The ingestion job `ingestion_raw_events` failed on 2026-07-12 due to a `SchemaMismatchException` in the `s3://psiog-raw/events/2026-07-12/part-0007.parquet` file. To resolve this, the recommended action is to move the problematic partition to `s3://psiog-raw/quarantine/<date>/` and re-run job 4822 from the Databricks Jobs UI. Following this, job 4830 (`crm_sync`) should be manually re-run to refresh the CRM.
 
 **Citations**
 
 - Databricks Job #4822 (ingestion_raw_events) run #99150
 - incident-2026-07-12-ingestion-failure.md § Actions
-- runbook-12-schema-mismatch.md § Symptom
 - runbook-12-schema-mismatch.md § Recovery Steps
+- incident-2026-07-12-ingestion-failure.md § Known Issues
+- runbook-12-schema-mismatch.md § Symptom
 
 ### Q11 — What's the status of the latest deployment and are there any known issues?
 

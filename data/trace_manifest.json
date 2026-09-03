@@ -122,20 +122,19 @@
         "docs"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_144630_ebji8tdr",
-      "run_id": "run_20260714_144630_1l16bvq9",
+      "execution_id": "exec_20260903_181908_i4xiuaut",
+      "run_id": "run_20260903_181908_252dbkyd",
       "error": "",
       "domains": [
         "docs"
       ],
-      "answer": "If the `deploy-ingestion` pipeline fails its integration-test gate due to a schema contract mismatch, first check whether the corresponding ingestion job is also failing. If so, re-run the `deploy-ingestion` pipeline (run 5530) and investigate the cause, which is often an upstream producer changing a column type without schema review. If re-running fails a second time, escalate to the Data Platform on-call and page the schema owner. Do not loosen the column type to unblock the pipeline, as this corrupts the silver layer silently.",
+      "answer": "If the `deploy-ingestion` pipeline fails its integration-test gate for a schema contract, check whether the corresponding ingestion job is also failing. The failure often indicates a disagreement between the service and the data platform regarding a column type, frequently related to the `customer_tier` column. If re-running job 4822 fails a second time, escalate to the Data Platform on-call and page the schema owner.",
       "citations": [
-        "incident-2026-07-12-ingestion-failure.md \u00a7 Known Issues",
         "runbook-12-schema-mismatch.md \u00a7 Cause",
         "runbook-05-deployment-quality-gates.md \u00a7 When a Gate Fails",
         "runbook-12-schema-mismatch.md \u00a7 Escalation"
       ],
-      "seconds": 123.8
+      "seconds": 181.2
     },
     {
       "id": 8,
@@ -166,20 +165,19 @@
         "data-platform"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_142110_b9u0edtk",
-      "run_id": "run_20260714_142110_pbdra5be",
+      "execution_id": "exec_20260903_182225_ak7wxnxf",
+      "run_id": "run_20260903_182225_hjjvffnp",
       "error": "",
       "domains": [
         "crm",
         "data-platform"
       ],
-      "answer": "Last night\u2019s pipeline failure, specifically run #99163 of the `crm_sync` job, resulted in a synchronization issue for CRM customer accounts. The `crm_sync` job failed because the source table `bronze.raw_events` hadn\u2019t been refreshed by job #4822, leading to 0 rows being synced. Consequently, two CRM accounts, Acme Corp (ACC-1001) and TechStart Ltd (ACC-1002), experienced stale sync statuses.",
+      "answer": "Yesterday\u2019s pipeline failure impacted a CRM customer sync. The `crm_sync` job run #99163 terminated with an error indicating that the bronze.raw_events table was not refreshed by job 4822 (ingestion_raw_events), resulting in zero rows synced to CRM. Consequently, the remains at the Negotiation stage, owned by Divya Raman.",
       "citations": [
         "Databricks Job #4830 (crm_sync) run #99163",
-        "CRM account ACC-1001 (Acme Corp)",
-        "CRM account ACC-1002 (TechStart Ltd)"
+        "CRM account ACC-1001 (Acme Corp)"
       ],
-      "seconds": 340.6
+      "seconds": 444.7
     },
     {
       "id": 10,
@@ -189,21 +187,22 @@
         "docs"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_145055_3hvpsfti",
-      "run_id": "run_20260714_145055_vksib5t7",
+      "execution_id": "exec_20260903_183031_6f9v61d6",
+      "run_id": "run_20260903_183031_2bp0qc8t",
       "error": "",
       "domains": [
         "data-platform",
         "docs"
       ],
-      "answer": "The ingestion job \u2018ingestion_raw_events\u2019 failed on 2026-07-12 due to a SchemaMismatchException related to an integer value in a source file. To resolve this, follow the steps outlined in Runbook 12, which involves identifying the problematic file in the `s3://psiog-raw/events/<date>/` prefix and moving it to the quarantine location `s3://psiog-raw/quarantine/<date>/`. After re-running job 4822 from the Databricks Jobs UI, which will skip the quarantined partition, manually re-run job 4830 to refresh the CRM, and notify the producer team to correct the emitter and re-publish the partition.",
+      "answer": "The ingestion job `ingestion_raw_events` failed on 2026-07-12 due to a `SchemaMismatchException` in the `s3://psiog-raw/events/2026-07-12/part-0007.parquet` file. To resolve this, the recommended action is to move the problematic partition to `s3://psiog-raw/quarantine/<date>/` and re-run job 4822 from the Databricks Jobs UI. Following this, job 4830 (`crm_sync`) should be manually re-run to refresh the CRM.",
       "citations": [
         "Databricks Job #4822 (ingestion_raw_events) run #99150",
         "incident-2026-07-12-ingestion-failure.md \u00a7 Actions",
-        "runbook-12-schema-mismatch.md \u00a7 Symptom",
-        "runbook-12-schema-mismatch.md \u00a7 Recovery Steps"
+        "runbook-12-schema-mismatch.md \u00a7 Recovery Steps",
+        "incident-2026-07-12-ingestion-failure.md \u00a7 Known Issues",
+        "runbook-12-schema-mismatch.md \u00a7 Symptom"
       ],
-      "seconds": 239.8
+      "seconds": 506.9
     },
     {
       "id": 11,

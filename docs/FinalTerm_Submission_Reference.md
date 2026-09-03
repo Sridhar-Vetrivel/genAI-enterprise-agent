@@ -136,26 +136,34 @@ that Azure hosting and OpenRouter were deliberately descoped, not missed.
   ticked Yes, **do not re-paste the screenshot** — just reference the original `EV-ID`. Template
   provides `EV-01`…`EV-10` blocks; copy-paste the block (heading + table + paste area) for more.
 
-Evidence carried forward unchanged (tick Yes, reference the mid-term ID, no re-paste needed):
-`EV-01`…`EV-06`, `EV-08`, `EV-11`, `EV-12`, `EV-13`✝, `EV-14`✝, `EV-15`, `EV-16`, `EV-17`, `EV-18`.
+**Evidence carried forward unchanged** (tick Yes, reference the mid-term ID, no re-paste needed —
+these numbers have not moved since mid-term, so the existing screenshot still matches Section 6):
+`EV-01`…`EV-06`, `EV-08`, `EV-11`, `EV-12`, `EV-15`, `EV-16`, `EV-17`, `EV-18`.
 (`EV-11` was corrected during mid-term review — the pasted screenshot now shows the correct
 `coordinator.ask` execution, `devops`+`docs` routing, citations from both systems — so it carries
 cleanly.)
 
+**EV-07, EV-09, EV-10 do NOT carry forward.** They were flagged during mid-term review as showing
+a defect (a pre-fix, zero-citation docs-agent run, or a single-specialist frame on a cross-domain
+query) — the mid-term `.docx` itself is frozen and was never corrected, so these need fresh
+control-plane executions for this document. **This is unrelated to the numbers changing** — it is
+about the pasted image being wrong, not stale.
+
+**EV-13 and EV-14 also do NOT carry forward, for a different reason: the numbers themselves
+changed.** Mid-term reported 3.64% hallucination over 10 of 12 queries and 415 tests; the
+final-term run measured **5.56% over the full 12 of 12** and **419 tests**. Carrying the old
+screenshot forward would show a figure that contradicts Section 6's own final-term claim — exactly
+the mismatch the evaluator's cross-check exists to catch. These are superseded by fresh evidence
+below, not carried.
+
 New/updated evidence needed for Phase 2 claims (continue from `EV-19`):
 
-| New EV | Would evidence |
-|---|---|
-| EV-19 | Final `make cov` run — coverage figure as it stands at final submission (re-capture if it moved past 93.11%) |
-| EV-20 | Final `make qa-summary` — routing % and hallucination % as measured at final submission |
-| EV-21 | The hardened CI workflow actually running green on GitHub Actions (screenshot of the Actions tab, both Python versions) |
-| EV-22 | `docs/DEMO_RUNBOOK.md` itself, or a screenshot of a live walkthrough following it, as evidence for D-12 |
-
-✝ **EV-07, EV-09, EV-10 were flagged during the mid-term review as needing re-capture** (they
-showed a pre-fix, zero-citation docs-agent run, or a single-specialist frame on a cross-domain
-query). **Confirm those were fixed before ticking "Carried" on them** — if they were re-captured
-after mid-term submission, they are *new* evidence for this document (a fresh EV-19+ number, not
-a carry-forward), because the mid-term `.docx` itself is frozen and was not corrected.
+| New EV | Supersedes | Would evidence |
+|---|---|---|
+| EV-19 | EV-14 | `make cov` — **419 passed, 93.11% coverage** (measured at final submission) |
+| EV-20 | EV-13 | `make qa-summary` — **100% routing, 5.56% hallucination**, full 12/12 judged pass |
+| EV-21 | — | The hardened CI workflow actually running green on GitHub Actions (screenshot of the Actions tab, both Python versions) |
+| EV-22 | — | `docs/DEMO_RUNBOOK.md` itself, or a screenshot of a live walkthrough following it, as evidence for D-12 |
 
 ### 5. Working Demo, Repository & Live Walkthrough Plan
 Same repo-links table as mid-term, **plus a new mandatory `5.1 Live Code Walkthrough Plan`**

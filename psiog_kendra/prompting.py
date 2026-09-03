@@ -63,16 +63,22 @@ def _record_ids(text: str) -> set[str]:
 # is prompt scaffolding reaching the user, and it derails the grounding judge's claim
 # splitting on top.
 #
-# The closing bracket is OPTIONAL, and up to 40 characters of junk may sit before it. Two
-# real leaks on a Q12 run needed both allowances: "...passing all quality gates
-# [devops-agent. Acme Corp's deal..." never closes the bracket at all -- if it were required,
-# the tag survives untouched and the model's scaffolding reaches the reader. And
-# "...at 74% [docs-agent, Known Issues]. The payments..." closes the bracket, but only after
-# extra words the plain "-agent]" ending doesn't expect. Bounding the junk at 40 chars (rather
-# than allowing it unbounded) stops the match from running away across unrelated text if a
-# stray "]" or ")" happens to appear much later in the answer.
+# The closing bracket is OPTIONAL, and up to 40 characters of junk may sit before it. Real
+# leaks on one Q12 run needed both allowances: "...passing all quality gates [devops-agent.
+# Acme Corp's deal..." never closes the bracket at all -- if it were required, the tag
+# survives untouched and the model's scaffolding reaches the reader. And "...at 74%
+# [docs-agent, Known Issues]. The payments..." closes the bracket, but only after extra words
+# the plain "-agent]" ending doesn't expect. Bounding the junk at 40 chars (rather than
+# allowing it unbounded) stops the match from running away across unrelated text if a stray
+# "]" or ")" happens to appear much later in the answer.
+#
+# The word before "agent" is not always hyphenated either: the SAME run also produced
+# "...lack of auto-retry [CRM agent. The `deploy-ingestion`..." -- space-separated and
+# capitalised, not "crm-agent". The prefix is matched non-greedily and bounded to 30
+# characters so it can accept a hyphen OR whitespace without turning into an unbounded scan
+# for the word "agent" anywhere later in the sentence.
 _AGENT_TAG = re.compile(
-    r"\s*[\[(]\s*[a-z][a-z0-9-]*-agent\b(?:[^\]\)\n]{0,40}[\])])?",
+    r"\s*[\[(]\s*[a-z][a-z0-9\s-]{0,30}?agent\b(?:[^\]\)\n]{0,40}[\])])?",
     re.IGNORECASE,
 )
 

@@ -380,6 +380,21 @@ class TestFinalizeSynthesis:
         assert "Known Issues" not in answer
         assert "Payments succeeded." in answer
 
+    def test_a_space_separated_capitalised_agent_tag_is_stripped(self) -> None:
+        # Real Q12 leak, in the SAME answer as the hyphenated ones above: "...lack of
+        # auto-retry [CRM agent. The `deploy-ingestion`..." and "...last synced on
+        # 2026-07-12 [CRM agent]." -- "CRM agent" has no hyphen at all, and is capitalised.
+        # A regex that only matched "word-agent" missed both.
+        answer, _ = finalize_synthesis(
+            "The job failed, requiring a manual re-run [CRM agent. The workflow also failed. "
+            "The deal is Closed Won [CRM agent].",
+            [],
+            self.SUPPLIED,
+        )
+        assert "CRM agent" not in answer
+        assert "The workflow also failed." in answer
+        assert answer.rstrip().endswith("Closed Won.")
+
     def test_a_distant_stray_bracket_does_not_make_the_tag_strip_run_away(self) -> None:
         # The 40-char bound on "junk before the close bracket" exists so an unterminated tag
         # can never accidentally consume real content up to some unrelated "]" or ")" much

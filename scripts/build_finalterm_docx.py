@@ -96,9 +96,12 @@ EV_IMAGES: dict[str, tuple[str, list[str]]] = {
         ],
     ),
     "EV-18": ("carried", ["Q12-Workflow-View.png"]),
-    # EV-19 .. EV-22 have no image yet. Their paste areas keep the instruction naming the
-    # exact command to run, because a graded figure must be captured from a real terminal --
-    # rendering the numbers into a picture here would be manufacturing evidence.
+    "EV-19": ("new", ["ev-19.png"]),
+    "EV-20": ("new", ["ev-20.png"]),
+    # EV-21 and EV-22 have no image yet, and cannot: a green Actions run needs the branch
+    # pushed, and the walkthrough happens at the review. Their paste areas keep the capture
+    # instruction. A graded figure must come off a real terminal -- rendering the numbers
+    # into a picture here would be manufacturing evidence, so the build refuses to.
 }
 
 _SHOT_CARRIED = (
@@ -698,7 +701,9 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "CROSS-DOMAIN — Q10 joins a live failure to the documented fix",
         "The coordinator routes to data-platform + docs, reads the live job failure, finds the "
         "matching runbook in the RAG index, and returns the recovery steps — 5 citations spanning "
-        "the Databricks record and the runbook. RE-CAPTURED for the same reason as EV-09: the "
+        "the Databricks record and the runbook on THIS control-plane run (the in-process QA run "
+        "of the same query in EV-20 records 4: retrieval returns the chunks it scores above "
+        "threshold, so the count varies by run). RE-CAPTURED for the same reason as EV-09: the "
         "mid-term image showed only one specialist on a two-specialist query.",
         "D-02, D-03, D-04, D-07, D-09",
         "Specialists developed Weeks 6–7; cross-domain path delivered by Week 10 (ahead of its "

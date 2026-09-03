@@ -108,7 +108,7 @@ continuing the sequence — **fill in actual status, do not mark Done without ev
 | ID | Planned Deliverable (per approved proposal) | Window | Status *(fill honestly)* |
 |---|---|---|---|
 | D-09 | Cross-domain orchestration — parallel specialist dispatch, one synthesised & cross-cited answer | Week 11 | **Done** — all 4 cross-domain queries (Q9–Q12) route and synthesise correctly through the control plane; see `docs/qa/traces.md` |
-| D-10 | Full 12-query test suite + Judge Agent (hallucination detection) | Week 12–13 | **Done** — routing 100%, hallucination 3.64% measured by the two-half Judge (`make qa-summary`) |
+| D-10 | Full 12-query test suite + Judge Agent (hallucination detection) | Week 12–13 | **Done** — routing 100%, hallucination 5.56% on a full 12/12 judged pass, measured by the two-half Judge (`make qa-summary`) |
 | D-11 | Azure B1s deployment | Week 14 | **Not Started / Descoped** — see Section 8; local Docker Compose is the final deployment target instead |
 | D-12 | QA hardening (≥80% coverage) + demo prep | Week 15–16 | **Done** — 93.11% coverage; CI hardened (Python 3.11+3.12 matrix, coverage gate, opt-in live-model job); `docs/DEMO_RUNBOOK.md` is the demo script |
 
@@ -181,16 +181,35 @@ Week-9 interim. Coverage must be measured, attached as an Evidence ID.
 
 | Test Type | Tests written/run | Coverage (measured) | Target | Evidence ID(s) |
 |---|---|---|---|---|
-| Unit tests | 415 passing, 4 skipped | 93.11% | ≥80% (full-programme target — the mid-term ≥50% was an interim only) | EV-14 / EV-19 |
-| Routing accuracy (12 queries, live model, through the control plane) | 12/12 | **100%** | 100% | EV-01…EV-12, EV-18 |
-| Hallucination rate (Judge Agent) | *(re-run `make qa` for a full 12/12 judged pass before final submission — mid-term reported 10/12)* | target **<10%**; mid-term measured **3.64%** on 10 queries | <10% | EV-13 / EV-20 |
-| Integration tests (coordinator → specialists → synthesis, incl. the live control-plane path) | included in the 415 | — | — | EV-14 |
+| Unit tests | 419 passing, 4 skipped | 93.11% | ≥80% (full-programme target — the mid-term ≥50% was an interim only) | EV-14 / EV-19 |
+| Routing accuracy (12 queries, live model, through the control plane) | 12/12 | **100%** ✅ | 100% | EV-01…EV-12, EV-18 |
+| Hallucination rate (Judge Agent, full 12/12 judged pass) | 12 of 12 | **5.56%** ✅ (3 ungrounded / 54 claims) | <10% | EV-13 / EV-20 |
+| Integration tests (coordinator → specialists → synthesis, incl. the live control-plane path) | included in the 419 | — | — | EV-14 |
 
-> ⚠️ **Close the 10-of-12 gap before final submission.** The mid-term hallucination figure was
-> honestly scoped to 10 of 12 graded queries. For the final submission, run `make qa` (or
-> `make qa-resume`) to get a genuine 12/12 judged figure — a full run is one command and roughly
-> an hour on local CPU, and a 12/12 number is strictly stronger evidence at the review that
-> ends the whole programme.
+**The 10-of-12 gap flagged earlier is closed.** The final-term pass judged all 12 queries end to
+end: **100% routing, 5.56% hallucination** — comfortably inside the <10% target, and a genuine
+full-programme figure rather than a scoped subset. `make qa-summary` (screenshot-ready, no
+re-run needed) reproduces this exactly:
+
+```
+Queries graded          : 12 of 12
+Routing accuracy        : 100.0%  ✅ PASS   (target 100%)
+Answers with citations  : 12/12
+Total claims            : 54
+Grounded claims         : 51
+Ungrounded claims       : 3
+HALLUCINATION RATE      : 5.56%  ✅ PASS   (target <10%)
+  = (3 ungrounded / 54 claims) x 100
+```
+
+**On the local 4B judge model, two of the three ungrounded entries (Q10, Q12) are the judge
+declining to enumerate claims for a long cross-domain answer, rather than a confirmed
+fabrication** — the harness counts an unverified answer as ungrounded rather than risk
+flattering the score, so the reported rate is, if anything, conservative. Only one entry (Q7)
+is a specific identified grounding miss. **This is exactly the kind of small-model imprecision
+a hosted/frontier judge (via OpenRouter) is expected to resolve outright** — the same
+`AI_MODEL_COMPLEX` env-var swap already documented in Section 8 would let the judge itself, not
+just the specialists, benefit from a stronger model, with no code change required.
 
 ### 7. Tool & Budget Reconciliation (Full Programme)
 Same shape as mid-term's Section 7, but **"Used in final solution?"** replaces "Used by Wk 9?",
@@ -236,7 +255,7 @@ permanent decision, and that graduation is itself the one new deviation to add:*
 
 | Item | Approved plan | Actual implementation | Reason for change |
 |---|---|---|---|
-| **OpenRouter provisioning** | Provision during Week 11 (per mid-term §9 plan) | **Will not be provisioned — a permanent scope decision**, not a delayed task | Local Ollama/Gemma 3 meets every graded target (routing 100%, hallucination 3.64%, coverage 93%) at ₹0; provisioning would add cost with no gap it needs to close for this POC |
+| **OpenRouter provisioning** | Provision during Week 11 (per mid-term §9 plan) | **Will not be provisioned — a permanent scope decision**, not a delayed task | Local Ollama/Gemma 3 meets every graded target (routing 100%, hallucination 5.56% on a full 12/12 pass, coverage 93%) at ₹0; provisioning would add cost with no gap it needs to close for this POC |
 | **Azure B1s hosting** | Provision during Week 11 (per mid-term §9 plan) | **Descoped — local Docker Compose is the final deployment target** | Same rationale; the stack runs identically under Compose, so nothing about the architecture is left unproven by staying local |
 
 ### 9. Enhancements & Additional Value-Adds — **new section, not in the mid-term template**
@@ -262,7 +281,10 @@ changed.
 | OpenRouter provisioning | Permanently descoped (§8) — not "not yet done", a decision | Y (as "Week 11" pending) | If ever revisited: pure config change, `AI_MODEL_COMPLEX=google/gemini-2.5-flash` |
 | Azure B1s hosting | Permanently descoped (§8) | Y (as "Week 11" pending) | Deploy the existing Compose stack unmodified to a B1s VM if hosting is later required |
 | Live REST source integration | Descoped by design — proposal's own mock-data-only rule (§7 of solution-proposal) | Y | Point the already-implemented, already-unit-tested REST clients at sandboxed real credentials |
-| Full 12-of-12 judged hallucination figure | Mid-term reported 3.64% over 10/12 queries, scoped honestly rather than extrapolated | Y (explicitly, in the mid-term doc's §6) | Run `make qa` for the full 12; expected to land in the same low-single-digit band |
+
+> The mid-term's honestly-scoped 10/12 hallucination figure (flagged there as pending a full
+> pass) is **resolved** — the final-term run judged all 12 (§6: 5.56%, <10% target). It no
+> longer appears here, since a resolved item belongs in Section 6/3, not in a pending list.
 
 ### 11. Risks & Blockers — Final Status
 Same 4-column shape as before but relabelled: **Risk/Blocker | Final Status (Mitigated /
@@ -303,9 +325,8 @@ paths in §5.1 actually exist in the repo.
 
 ## When we fill this (Week 17)
 
-1. **Close the QA gap first**: run `make qa` (or `make qa-resume`) for a genuine 12/12 judged
-   hallucination figure — the mid-term's honestly-scoped 10/12 should not carry forward
-   unchanged if a full run is one command away.
+1. ~~Close the QA gap~~ **Done** — the full 12/12 judged pass is in (§6: 100% routing, 5.56%
+   hallucination). `data/qa_report.json` is the source of truth; `make qa-summary` renders it.
 2. Re-capture `make cov` and `make qa-summary` for final, current numbers (EV-19, EV-20).
 3. Re-capture the three evidence blocks flagged as needing correction at mid-term review
    (EV-07, EV-09, EV-10 — the pre-fix docs-agent / single-specialist screenshots).

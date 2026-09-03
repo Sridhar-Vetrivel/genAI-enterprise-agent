@@ -232,3 +232,6 @@ data/qa_report.json
 
 # Per-node stdout from `make agents`
 data/agents/
+
+# Session-local safety snapshots of data/qa_report.json taken during a live QA run
+data/backups/

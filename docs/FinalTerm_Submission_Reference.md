@@ -2,9 +2,15 @@
 
 Reference notes on `docs/pSiddhi3_0_FinalTerm_Submission_Template 1.docx` (IMPACT pSiddhi 3.0,
 Psiog L&D). Captures the template's structure, rules, and every field to fill, plus how **Psiog
-Kendra** maps onto it. **Not filled yet** — this is a scaffold for when we assemble evidence in
-the Week 17 review window. Companion to [MidTerm_Submission_Reference.md](MidTerm_Submission_Reference.md),
+Kendra** maps onto it. Companion to [MidTerm_Submission_Reference.md](MidTerm_Submission_Reference.md),
 which this document's numbering and carry-forward rules build directly on.
+
+> ✅ **Filled and built.** `docs/S4-I-24_SridharVetrivel_FinalTermDoc.docx` is generated from
+> this reference by `python -m scripts.build_finalterm_docx` — 13 deliverables (D-01…D-13),
+> 22 evidence blocks (EV-01…EV-22), 5 enhancements (EN-01…EN-05). Keep this markdown as the
+> reasoning record and the script as the source of truth for the `.docx`; regenerate rather
+> than hand-editing. Screenshots are deliberately **not** embedded — each paste area names the
+> image to drop in, because "full-size and readable" is a judgement about the page.
 
 > **Purpose of the submission doc:** An **end-to-end record of the FULL programme, Week 4–17** —
 > not a delta on the mid-term. It is evaluated **together with** the mid-term submission

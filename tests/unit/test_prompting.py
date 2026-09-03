@@ -354,6 +354,44 @@ class TestFinalizeSynthesis:
         assert "[crm-agent]" not in answer
         assert answer == "Zero rows were synced to CRM. Three accounts were affected."
 
+    def test_an_unterminated_agent_tag_is_stripped_without_eating_the_next_sentence(
+        self,
+    ) -> None:
+        # Real Q12 leak: "...passing all quality gates [devops-agent. Acme Corp's deal
+        # DEAL-7781..." -- the bracket never closes. Requiring a "]" left the tag untouched;
+        # the fix must also not swallow the unrelated sentence that follows it.
+        answer, _ = finalize_synthesis(
+            "All quality gates passed [devops-agent. Acme Corp's deal is in Negotiation.",
+            [],
+            self.SUPPLIED,
+        )
+        assert "[devops-agent" not in answer
+        assert "Acme Corp's deal is in Negotiation." in answer
+
+    def test_an_agent_tag_with_trailing_words_before_the_bracket_is_stripped(self) -> None:
+        # Real Q12 leak: "...at 74% [docs-agent, Known Issues]. The payments..." -- the plain
+        # "-agent]" ending doesn't match when there are extra words before the close bracket.
+        answer, _ = finalize_synthesis(
+            "The coverage gate failed at 74% [docs-agent, Known Issues]. Payments succeeded.",
+            [],
+            self.SUPPLIED,
+        )
+        assert "docs-agent" not in answer
+        assert "Known Issues" not in answer
+        assert "Payments succeeded." in answer
+
+    def test_a_distant_stray_bracket_does_not_make_the_tag_strip_run_away(self) -> None:
+        # The 40-char bound on "junk before the close bracket" exists so an unterminated tag
+        # can never accidentally consume real content up to some unrelated "]" or ")" much
+        # later in a long answer.
+        answer, _ = finalize_synthesis(
+            "All gates passed [devops-agent. " + ("word " * 20) + "(see the linked doc).",
+            [],
+            self.SUPPLIED,
+        )
+        assert "[devops-agent" not in answer
+        assert "(see the linked doc)." in answer
+
     def test_a_source_the_answer_names_is_cited_even_if_the_model_forgot_it(self) -> None:
         # The real failure: the answer named ACC-1001, ACC-1002 and ACC-1003 and cited only
         # ACC-1001, leaving two-thirds of its claims uncited.

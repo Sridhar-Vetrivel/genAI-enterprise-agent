@@ -75,10 +75,84 @@ EV_IMAGES: dict[str, tuple[str, list[str]]] = {
     "EV-04": ("carried", ["Q04.png"]),
     "EV-05": ("carried", ["Q05.png"]),
     "EV-06": ("carried", ["Q06.png"]),
-    "EV-07": ("new", ["ev-07.png"]),
-    "EV-08": ("carried", ["Q08.png"]),
-    "EV-09": ("new", ["ev-09-flow.png", "ev-09-qa.png"]),
-    "EV-10": ("new", ["ev-10-flow.png", "ev-10-qa.png"]),
+    "EV-07": (
+        "new",
+        [
+            (
+                "Q07.png",
+                "BEFORE (the defect this block replaces) — the mid-term capture: "
+                'answer_docs_question on docs-agent returning "The indexed internal '
+                'documentation does not cover this question." with an EMPTY citations list. '
+                "Included so the correction below is verifiable rather than asserted.",
+            ),
+            (
+                "ev-07.png",
+                "AFTER (current, and the evidence for this block) — the same question through "
+                "coordinator.ask, execution exec_20260903_181908_i4xiuaut: answered from the RAG "
+                "index with 3 cited runbook sections.",
+            ),
+        ],
+    ),
+    "EV-08": (
+        "carried",
+        [
+            (
+                "Q08.png",
+                "The coordinator's own execution — `ask` on coordinator, showing "
+                'domains_used: ["docs"]. This is the ROUTING evidence.',
+            ),
+            (
+                "Q8.png",
+                "The docs-agent reasoner that served it — answer_docs_question executing on the "
+                "docs-agent node, with the same three citations. Together the two frames show the "
+                "delegated hop: the coordinator did not answer this itself.",
+            ),
+        ],
+    ),
+    "EV-09": (
+        "new",
+        [
+            (
+                "Q09.png",
+                "BEFORE (the defect this block replaces) — the mid-term capture: a "
+                "single-specialist frame (answer_data_question on data-agent, one Databricks "
+                "citation), which understated the cross-domain routing it was meant to prove.",
+            ),
+            (
+                "ev-09-flow.png",
+                "AFTER (1 of 2) — the DAG: Ask on coordinator fanning out to Answer Data "
+                "Question (data-agent) AND Answer Crm Question (crm-agent), both green.",
+            ),
+            (
+                "ev-09-qa.png",
+                "AFTER (2 of 2) — the same execution's output, exec_20260903_182225_ak7wxnxf: "
+                "citations spanning BOTH systems — Databricks Job #4830 run #99163 and CRM "
+                "account ACC-1001 (Acme Corp).",
+            ),
+        ],
+    ),
+    "EV-10": (
+        "new",
+        [
+            (
+                "Q10.png",
+                "BEFORE (the defect this block replaces) — the mid-term capture: "
+                'answer_docs_question on docs-agent returning "The indexed internal '
+                'documentation does not cover this question." with an EMPTY citations list.',
+            ),
+            (
+                "ev-10-flow.png",
+                "AFTER (1 of 2) — the DAG: Ask on coordinator fanning out to Answer Docs "
+                "Question (docs-agent) AND Answer Data Question (data-agent), both green.",
+            ),
+            (
+                "ev-10-qa.png",
+                "AFTER (2 of 2) — the same execution's output, exec_20260903_183031_6f9v61d6: "
+                "the live Databricks failure joined to the documented recovery steps, citing "
+                "both the job record and the runbook.",
+            ),
+        ],
+    ),
     "EV-11": ("carried", ["Q11.png"]),
     "EV-12": ("carried", ["Q12.png"]),
     "EV-13": ("carried", ["ev-hallucination.png"]),
@@ -98,10 +172,15 @@ EV_IMAGES: dict[str, tuple[str, list[str]]] = {
     "EV-18": ("carried", ["Q12-Workflow-View.png"]),
     "EV-19": ("new", ["ev-19.png"]),
     "EV-20": ("new", ["ev-20.png"]),
-    # EV-21 and EV-22 have no image yet, and cannot: a green Actions run needs the branch
-    # pushed, and the walkthrough happens at the review. Their paste areas keep the capture
-    # instruction. A graded figure must come off a real terminal -- rendering the numbers
-    # into a picture here would be manufacturing evidence, so the build refuses to.
+    # EV-22 reuses EV-16's fleet view by explicit decision. It is the SAME image, so the
+    # block says so outright and narrows its claim to what that image actually proves --
+    # the runbook's pre-demo readiness step. Passing the same pixels off as a second,
+    # independent piece of evidence is the one thing that would make it worse than reuse.
+    "EV-22": ("reused", ["Agents-Up-and-Running.png"]),
+    # EV-21 is deliberately left open: a green Actions run needs the branch pushed. Its
+    # paste area keeps the capture instruction, and Section 10 records it as pending. A
+    # graded figure must come off a real run -- rendering one here would be manufacturing
+    # evidence, so the build refuses to and reports the block as still open.
 }
 
 _SHOT_CARRIED = (
@@ -110,6 +189,11 @@ _SHOT_CARRIED = (
     "applies."
 )
 _SHOT_NEW = "Screenshot below — captured for this submission:"
+_SHOT_REUSED = (
+    "Screenshot below — this is the SAME image as EV-16, reused deliberately rather than "
+    "presented as separate evidence. See the note in the table above for what this block "
+    "claims from it and what it does not."
+)
 
 # --------------------------------------------------------------------------------------
 # Section 1 — Participant & Project Identification (11 rows)
@@ -565,12 +649,14 @@ EVIDENCE = [
     ),
     (
         "EV-22",
-        "The live end-to-end walkthrough executed against docs/DEMO_RUNBOOK.md — control plane up, "
-        "five nodes routable, a single-domain and a cross-domain query answered live with "
-        "citations. Evidence that the demo plan in Section 5.1 actually runs",
+        "Demo readiness — the first checkpoint of docs/DEMO_RUNBOOK.md executed: control plane up "
+        "under Docker Compose, all five nodes online, Ready, Active and Verified, each with its "
+        "own reasoners, skills and DID. This is the state the Section 5.1 walkthrough starts from. "
+        "The image is REUSED from EV-16 (same artefact, second claim — stated in the block, not "
+        "hidden); the live-answer evidence is EV-01 … EV-12",
         "D-12, D-13",
-        "docs/DEMO_RUNBOOK.md (committed) · http://localhost:8080/ui/",
-        "No — new; SCREENSHOT CAPTURE PENDING (performed at the review). See Section 10",
+        "docs/DEMO_RUNBOOK.md (committed) · `make agents-status` · http://localhost:8080/ui/nodes",
+        "No — new block; image reused from EV-16 (see the block note)",
     ),
 ]
 
@@ -888,17 +974,29 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         ),
     ),
     "EV-22": (
-        "The live end-to-end walkthrough, executed against the demo runbook",
-        "Evidence that the Section 5.1 walkthrough plan actually runs, not just that it is written "
-        "down: the control plane up, all five nodes reported routable by `make agents-status` "
-        "(which asks each port directly rather than trusting the node list), and both a "
-        "single-domain and a cross-domain query answered live with citations through "
-        "coordinator.ask.",
+        "Demo readiness — the fleet confirmed ready before a walkthrough (runbook step 1)",
+        "The first checkpoint of docs/DEMO_RUNBOOK.md, executed: the control plane up under "
+        "Docker Compose with all five nodes online, Ready, Active and Verified, each carrying its "
+        "own reasoners, skills and DID. This is the state the Section 5.1 walkthrough starts "
+        "from, and the runbook exists because reaching it is not obvious — models must be pulled "
+        "and warmed, five nodes must bind five DISTINCT ports (the SDK defaults every node to "
+        "8001), each must register a callback URL the control plane can dial from inside Docker, "
+        "and the RAG index must be loaded into the control plane's own vector memory, which is a "
+        "different store from the local index the offline tests use. Every one of those was "
+        "wrong-by-default at least once during this build.\n\n"
+        "STATED PLAINLY, because the evaluator will notice: the image below is the SAME "
+        "screenshot as EV-16, reused rather than re-captured. EV-16 offers it as evidence that "
+        "the orchestration layer of D-01 exists; this block offers it as the runbook's readiness "
+        "step for D-12/D-13. It is one artefact serving two claims, not two independent "
+        "artefacts. What it does NOT show is a query being answered during a walkthrough — the "
+        "live-answer evidence for that is EV-01 … EV-12, and the walkthrough itself is performed "
+        "at the review session.",
         "D-12, D-13",
-        "Runbook written and committed 03-Sep-2026 (Week 17); walkthrough performed «DATE»",
-        "docs/DEMO_RUNBOOK.md (committed and verifiable by file today) · http://localhost:8080/ui/",
-        "☑ No — new (Phase 2). SCREENSHOT CAPTURE PENDING: the runbook is committed, but the "
-        "walkthrough it scripts is performed at the review session itself — see Section 10.      "
+        "Runbook written and committed 03-Sep-2026 (Week 17); fleet state as captured "
+        "14-Jul-2026 and re-verified on the demo stack 03-Sep-2026",
+        "docs/DEMO_RUNBOOK.md (committed and verifiable by file today) · `make agents-status` · "
+        "http://localhost:8080/ui/nodes",
+        "☑ No — new block (Phase 2), but the IMAGE is reused from EV-16; see the note above.      "
         "☐ Yes — same as Mid-Term EV-___",
         _paste(
             [
@@ -1402,20 +1500,21 @@ PENDING = [
         "A deployment-configuration change, not an application one.",
     ),
     (
-        "Screenshot capture for EV-21 (CI green on GitHub Actions) and EV-22 (the live "
-        "walkthrough) — NOT a deliverable gap, an evidence-capture timing note",
-        "Both underlying artefacts are DONE and verifiable by file in the repository today: "
-        ".github/workflows/ci.yml carries the hardened workflow (Python 3.11 + 3.12 matrix, "
-        "enforced ≥80% coverage gate, coverage artefact, opt-in live-model job) and "
-        "docs/DEMO_RUNBOOK.md carries the demo script. What cannot exist yet is a SCREENSHOT of "
-        "each one running: a green Actions run requires the branch to be pushed, and the "
-        "walkthrough is by definition performed at the review session. Recorded here so that "
-        "Section 3's Done statuses for D-12 and D-13 are read correctly — each rests primarily on "
-        "already-measured evidence (EV-19, EV-20), with these two as confirming captures.",
+        "Screenshot capture for EV-21 (the hardened CI running green on GitHub Actions) — NOT a "
+        "deliverable gap, an evidence-capture timing note",
+        "The artefact itself is DONE and verifiable by file in the repository today: "
+        ".github/workflows/ci.yml carries the hardened workflow — Python 3.11 + 3.12 matrix, "
+        "concurrency cancellation, an enforced ≥80% coverage gate, the coverage.xml artefact, and "
+        "the opt-in live-model job. All three gates it runs (ruff check, ruff format --check, and "
+        "pytest at ≥80%) pass locally on the submitted commit. What cannot exist yet is a "
+        "SCREENSHOT of it running green, because that requires the branch to be pushed. Recorded "
+        "here so Section 3's Done status for D-12 is read correctly: it rests primarily on "
+        "already-measured evidence (EV-19 — 419 passed, 93.11%), with EV-21 as a confirming "
+        "capture of the same measurement happening in CI rather than on a developer machine.",
         "N — a Phase 2 note",
-        "Capture both inside the Week 17 review window: push the branch and screenshot the green "
-        "matrix run (EV-21), then walk docs/DEMO_RUNBOOK.md live and screenshot "
-        "`make agents-status` plus the resulting coordinator.ask execution (EV-22).",
+        "Push the branch and screenshot the green matrix run, expanding the coverage step so the "
+        "gate is visible enforcing ≥80% inside CI. Nothing about the code changes; this closes an "
+        "evidence block, not a defect.",
     ),
 ]
 
@@ -1743,7 +1842,7 @@ def _shot_note(ev: str, block: tuple) -> str:
     if entry is None:
         return block[6]
     mode, files = entry
-    note = _SHOT_NEW if mode == "new" else _SHOT_CARRIED.format(ev=ev)
+    note = {"new": _SHOT_NEW, "reused": _SHOT_REUSED}.get(mode) or _SHOT_CARRIED.format(ev=ev)
     if len(files) > 1:
         note += f"  ({len(files)} images)"
     return note
@@ -1760,10 +1859,23 @@ def _add_images(para: Paragraph, ev: str, width) -> tuple:
         return para._element, 0
 
     anchor = para._element
-    for name in entry[1]:
+    for item in entry[1]:
+        # An entry is either a bare filename or (filename, label). A labelled image gets a
+        # caption paragraph of its own, which is what makes a BEFORE/AFTER pair readable as
+        # a pair instead of as two unexplained screenshots.
+        name, label = item if isinstance(item, tuple) else (item, None)
         path = IMAGES / name
         if not path.exists():
             raise FileNotFoundError(f"{ev}: image not found: {path}")
+
+        if label:
+            caption = OxmlElement("w:p")
+            anchor.addnext(caption)
+            anchor = caption
+            run = Paragraph(caption, para._parent).add_run(label)
+            run.bold = True
+            run.font.size = Pt(9)
+
         element = OxmlElement("w:p")
         anchor.addnext(element)
         anchor = element

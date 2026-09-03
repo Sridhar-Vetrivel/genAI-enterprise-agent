@@ -141,7 +141,7 @@ PROBLEM = (
     "this document is an end-to-end record. Psiog's engineering, data and operations teams work "
     "across a fragmented estate — Databricks for pipelines, GitHub/Azure DevOps for deployments, "
     "a CRM for customer data, and runbooks scattered across wikis. Answering even a simple "
-    "operational question — \"did last night's pipeline run?\" — means opening four or five tools "
+    'operational question — "did last night\'s pipeline run?" — means opening four or five tools '
     "with different credentials and stitching the results together by hand. This creates an "
     "onboarding bottleneck, turns senior engineers into human routers, and slows cross-functional "
     "decisions. The approved proposal identified hallucination as the central risk: an assistant "
@@ -171,7 +171,7 @@ SOLUTION = (
 TOOLS_APPROVED = (
     "As approved: AgentField (orchestration, vector memory and DAG tracing), OpenRouter with "
     "google/gemini-2.5-flash (primary inference), Ollama with a local model (zero-cost fallback "
-    "inference), Pydantic with extra=\"forbid\" (structured output), Azure B1s VM on the 12-month "
+    'inference), Pydantic with extra="forbid" (structured output), Azure B1s VM on the 12-month '
     "free tier (hosting), Docker Compose (deployment), and Pytest + GitHub Actions + an LLM Judge "
     "Agent (QA). Full reconciliation against actual usage — including the two approved tools that "
     "were descoped and the one that had to be added — is in Section 7."
@@ -378,15 +378,15 @@ NEW = "No — new / re-captured"
 EVIDENCE = [
     (
         "EV-01",
-        "Q01 \"Did yesterday's ETL pipeline for the sales data run successfully?\" is routed by the "
-        "LLM to data-platform and answered citing the exact Databricks run",
+        'Q01 "Did yesterday\'s ETL pipeline for the sales data run successfully?" is routed by '
+        "the LLM to data-platform and answered citing the exact Databricks run",
         "D-02, D-03",
         "docs/qa/q01.md · execution exec_20260714_141123_g9gremvx",
         "Yes — Mid-Term EV-01",
     ),
     (
         "EV-02",
-        "Q02 \"What was the error in the last failed Databricks job?\" routes to data-platform and "
+        'Q02 "What was the error in the last failed Databricks job?" routes to data-platform and '
         "quotes the SchemaMismatchException from the job record it cites",
         "D-02, D-03",
         "docs/qa/q02.md · execution exec_20260714_141241_mqlvknj3",
@@ -394,7 +394,7 @@ EVIDENCE = [
     ),
     (
         "EV-03",
-        "Q03 \"Did the latest deployment of the payments service pass all quality gates?\" routes "
+        'Q03 "Did the latest deployment of the payments service pass all quality gates?" routes '
         "to devops and cites the GitHub Actions run",
         "D-02, D-05",
         "docs/qa/q03.md · execution exec_20260714_141414_omi6no7o",
@@ -402,7 +402,7 @@ EVIDENCE = [
     ),
     (
         "EV-04",
-        "Q04 \"What was the last deployment date for the auth service?\" routes to devops and "
+        'Q04 "What was the last deployment date for the auth service?" routes to devops and '
         "answers the date from the deploy-auth run it cites",
         "D-02, D-05",
         "docs/qa/q04.md · execution exec_20260714_141538_39ycscfa",
@@ -410,7 +410,7 @@ EVIDENCE = [
     ),
     (
         "EV-05",
-        "Q05 \"What is the current deal status for Acme Corp?\" routes to crm and cites BOTH the "
+        'Q05 "What is the current deal status for Acme Corp?" routes to crm and cites BOTH the '
         "account and the deal record",
         "D-02, D-06",
         "docs/qa/q05.md · execution exec_20260714_141715_68sxegi6",
@@ -418,7 +418,7 @@ EVIDENCE = [
     ),
     (
         "EV-06",
-        "Q06 \"Who is the account owner for TechStart Ltd?\" routes to crm and cites the CRM "
+        'Q06 "Who is the account owner for TechStart Ltd?" routes to crm and cites the CRM '
         "account — a differently phrased question reaching the same specialist, which is evidence "
         "that routing is intent classification and not keyword matching",
         "D-02, D-06",
@@ -427,17 +427,17 @@ EVIDENCE = [
     ),
     (
         "EV-07",
-        "RE-CAPTURED. Q07 \"What is the runbook for a schema mismatch?\" routes to docs and answers "
-        "from the RAG index, citing 3 retrieved sections on this control-plane run — the mid-term "
-        "screenshot for this block showed a pre-fix, zero-citation docs-agent run, so it is "
-        "replaced rather than carried",
+        'RE-CAPTURED. Q07 "What is the runbook for a schema mismatch?" routes to docs and '
+        "answers from the RAG index, citing 3 retrieved sections on this control-plane run — "
+        "the mid-term screenshot for this block showed a pre-fix, zero-citation docs-agent "
+        "run, so it is replaced rather than carried",
         "D-02, D-04",
         "docs/qa/q07.md · docs/qa/traces.md · execution exec_20260903_181908_i4xiuaut",
         "No — re-captured (supersedes the defective Mid-Term EV-07 image)",
     ),
     (
         "EV-08",
-        "Q08 \"What does the architecture doc say about the ingestion pipeline?\" routes to docs "
+        'Q08 "What does the architecture doc say about the ingestion pipeline?" routes to docs '
         "and cites the indexed architecture document down to the section",
         "D-02, D-04",
         "docs/qa/q08.md · execution exec_20260714_144845_mo16pl3y",
@@ -446,7 +446,7 @@ EVIDENCE = [
     (
         "EV-09",
         "RE-CAPTURED. CROSS-DOMAIN — Q09 \"Did last night's pipeline failure affect any CRM "
-        "customer sync?\" routes to data-platform + crm and links the failed job to the specific "
+        'customer sync?" routes to data-platform + crm and links the failed job to the specific '
         "customer accounts left stale, citing both systems. The mid-term image showed a "
         "single-specialist frame of this cross-domain query, so it is replaced rather than carried",
         "D-02, D-03, D-06, D-07, D-09",
@@ -455,8 +455,8 @@ EVIDENCE = [
     ),
     (
         "EV-10",
-        "RE-CAPTURED. CROSS-DOMAIN — Q10 \"The ingestion job failed — is there a fix in the "
-        "runbooks?\" routes to data-platform + docs and joins the live failure to the documented "
+        'RE-CAPTURED. CROSS-DOMAIN — Q10 "The ingestion job failed — is there a fix in the '
+        'runbooks?" routes to data-platform + docs and joins the live failure to the documented '
         "recovery steps, citing 5 sources spanning both systems on this control-plane run. The "
         "mid-term image showed a single-specialist frame, so it is replaced rather than carried",
         "D-02, D-03, D-04, D-07, D-09",
@@ -466,7 +466,7 @@ EVIDENCE = [
     (
         "EV-11",
         "CROSS-DOMAIN — Q11 \"What's the status of the latest deployment and are there any known "
-        "issues?\" routes to devops + docs; the four citations span both systems (two GitHub "
+        'issues?" routes to devops + docs; the four citations span both systems (two GitHub '
         "Actions runs plus the quality-gates runbook and the incident report)",
         "D-02, D-04, D-05, D-07, D-09",
         "docs/qa/q11.md · execution exec_20260714_145520_dxtvhyol",
@@ -474,8 +474,8 @@ EVIDENCE = [
     ),
     (
         "EV-12",
-        "CROSS-DOMAIN — Q12 \"Give me a full status update — pipeline, deployments, and any open "
-        "incidents\" routes to ALL FOUR domains and synthesises one answer citing across every "
+        'CROSS-DOMAIN — Q12 "Give me a full status update — pipeline, deployments, and any open '
+        'incidents" routes to ALL FOUR domains and synthesises one answer citing across every '
         "system. The hardest query in the suite",
         "D-02, D-03, D-04, D-05, D-06, D-07, D-09",
         "docs/qa/q12.md · execution exec_20260714_150256_x4r81cqa",
@@ -653,9 +653,9 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
     ),
     "EV-07": (
         "Q07 routes to docs and answers from the RAG index, citing the retrieved sections",
-        "The docs agent retrieves from the vector index by semantic similarity and answers strictly "
-        "from the retrieved chunks, citing each document and section — 3 citations on THIS "
-        "control-plane run. (The in-process QA run of the same query in EV-20 records 5 "
+        "The docs agent retrieves from the vector index by semantic similarity and answers "
+        "strictly from the retrieved chunks, citing each document and section — 3 citations "
+        "on THIS control-plane run. (The in-process QA run of the same query in EV-20 records 5 "
         "citations: retrieval returns the chunks it scores above threshold, so the count varies "
         "by run. The two are separate executions, not a discrepancy.) RE-CAPTURED for this "
         "submission: the image pasted at mid-term showed a pre-fix run that returned zero "
@@ -666,8 +666,12 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "control-plane execution exec_20260903_181908_i4xiuaut",
         "☑ No (new / progressed — supersedes the defective Mid-Term EV-07 image)      "
         "☐ Yes — same as Mid-Term EV-___",
-        _paste(["AgentField UI → Executions → exec_20260903_181908_i4xiuaut "
-                "(coordinator.ask, routed: docs, 3 citations, 181.2s)"]),
+        _paste(
+            [
+                "AgentField UI → Executions → exec_20260903_181908_i4xiuaut "
+                "(coordinator.ask, routed: docs, 3 citations, 181.2s)"
+            ]
+        ),
     ),
     "EV-08": (
         "Q08 routes to docs and cites the architecture document by section",
@@ -694,8 +698,12 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "control-plane execution exec_20260903_182225_ak7wxnxf",
         "☑ No (new / progressed — supersedes the defective Mid-Term EV-09 image)      "
         "☐ Yes — same as Mid-Term EV-___",
-        _paste(["AgentField UI → Executions → exec_20260903_182225_ak7wxnxf "
-                "(coordinator.ask, routed: crm + data-platform, 2 citations, 444.7s)"]),
+        _paste(
+            [
+                "AgentField UI → Executions → exec_20260903_182225_ak7wxnxf "
+                "(coordinator.ask, routed: crm + data-platform, 2 citations, 444.7s)"
+            ]
+        ),
     ),
     "EV-10": (
         "CROSS-DOMAIN — Q10 joins a live failure to the documented fix",
@@ -712,8 +720,12 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "control-plane execution exec_20260903_183031_6f9v61d6",
         "☑ No (new / progressed — supersedes the defective Mid-Term EV-10 image)      "
         "☐ Yes — same as Mid-Term EV-___",
-        _paste(["AgentField UI → Executions → exec_20260903_183031_6f9v61d6 "
-                "(coordinator.ask, routed: data-platform + docs, 5 citations, 506.9s)"]),
+        _paste(
+            [
+                "AgentField UI → Executions → exec_20260903_183031_6f9v61d6 "
+                "(coordinator.ask, routed: data-platform + docs, 5 citations, 506.9s)"
+            ]
+        ),
     ),
     "EV-11": (
         "CROSS-DOMAIN — Q11 combines deployment status with known issues",
@@ -730,8 +742,9 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
     ),
     "EV-12": (
         "CROSS-DOMAIN — Q12 routes to ALL FOUR domains and synthesises one cited answer",
-        "The hardest query in the suite. One question, all four specialists, one synthesised answer "
-        "citing across every system — pipelines, deployments, customer accounts and incident docs.",
+        "The hardest query in the suite. One question, all four specialists, one synthesised "
+        "answer citing across every system — pipelines, deployments, customer accounts and "
+        "incident docs.",
         "D-02, D-03, D-04, D-05, D-06, D-07, D-09",
         "Specialists developed Weeks 5–9; four-domain synthesis delivered by Week 10 (ahead of "
         "its planned Week 11 window); traced 14-Jul-2026",
@@ -826,8 +839,12 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "`make cov` · .github/workflows/ci.yml (coverage.xml artefact)",
         "☑ No (new / progressed — final-programme measurement, supersedes EV-14)      "
         "☐ Yes — same as Mid-Term EV-___",
-        _paste(["Terminal: `make cov` — must read \"419 passed, 4 skipped\" and "
-                "\"Total coverage: 93.11%\""]),
+        _paste(
+            [
+                'Terminal: `make cov` — must read "419 passed, 4 skipped" and '
+                '"Total coverage: 93.11%"'
+            ]
+        ),
     ),
     "EV-20": (
         "FINAL — the graded QA run over all 12 queries: 100% routing, 5.56% hallucination",
@@ -842,8 +859,12 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "`make qa-summary` · data/qa_report.json · psiog_kendra/qa/judge.py",
         "☑ No (new / progressed — final-programme measurement, supersedes EV-13)      "
         "☐ Yes — same as Mid-Term EV-___",
-        _paste(["Terminal: `make qa-summary` — must read \"Queries graded: 12 of 12\", "
-                "\"Routing accuracy: 100.0%\" and \"HALLUCINATION RATE: 5.56%\""]),
+        _paste(
+            [
+                'Terminal: `make qa-summary` — must read "Queries graded: 12 of 12", '
+                '"Routing accuracy: 100.0%" and "HALLUCINATION RATE: 5.56%"'
+            ]
+        ),
     ),
     "EV-21": (
         "The hardened CI workflow green on GitHub Actions, across both Python versions",
@@ -859,8 +880,12 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "☑ No — new (Phase 2 enhancement). SCREENSHOT CAPTURE PENDING: the workflow is committed, "
         "but a green run can only exist once the branch is pushed, so this is captured in the "
         "review window — see Section 10.      ☐ Yes — same as Mid-Term EV-___",
-        _paste(["GitHub → Actions → the latest CI run on master: both matrix jobs "
-                "(3.11 and 3.12) green, coverage artefact listed"]),
+        _paste(
+            [
+                "GitHub → Actions → the latest CI run on master: both matrix jobs "
+                "(3.11 and 3.12) green, coverage artefact listed"
+            ]
+        ),
     ),
     "EV-22": (
         "The live end-to-end walkthrough, executed against the demo runbook",
@@ -875,9 +900,12 @@ EV_BLOCKS: dict[str, tuple[str, str, str, str, str, str, str]] = {
         "☑ No — new (Phase 2). SCREENSHOT CAPTURE PENDING: the runbook is committed, but the "
         "walkthrough it scripts is performed at the review session itself — see Section 10.      "
         "☐ Yes — same as Mid-Term EV-___",
-        _paste(["Terminal: `make agents-status` showing all five nodes routable",
-                "AgentField UI → Executions → the live coordinator.ask run from the "
-                "walkthrough"]),
+        _paste(
+            [
+                "Terminal: `make agents-status` showing all five nodes routable",
+                "AgentField UI → Executions → the live coordinator.ask run from the walkthrough",
+            ]
+        ),
     ),
 }
 
@@ -1042,8 +1070,8 @@ TOOLS = [
         "☑ Yes  ☐ No  ☐ Partial",
         "₹0",
         "Approved as the fallback and promoted to the permanent, sole inference path. The fallback "
-        "is therefore proven under load rather than theoretical: routing 100%, hallucination 5.56%, "
-        "all 12 queries answered through the control plane on it.",
+        "is therefore proven under load rather than theoretical: routing 100%, hallucination "
+        "5.56%, all 12 queries answered through the control plane on it.",
     ),
     (
         "Llama 4 Scout — the approved local model",
@@ -1064,7 +1092,7 @@ TOOLS = [
         "it does not move the budget.",
     ),
     (
-        "Pydantic — structured output (extra=\"forbid\")",
+        'Pydantic — structured output (extra="forbid")',
         "Open-source, ₹0",
         "☑ Yes  ☐ No  ☐ Partial",
         "₹0",
@@ -1217,7 +1245,7 @@ DEVIATIONS = [
         "Prompt-scaffolding leakage into answers (discovered in Phase 2)",
         "(Not anticipated)",
         "The small local model occasionally wrote internal scaffolding — an agent tag such as "
-        "\"[docs-agent]\" or the injected date anchor — into the prose. Each leak class is now "
+        '"[docs-agent]" or the injected date anchor — into the prose. Each leak class is now '
         "stripped and covered by a regression test.",
         "NEW in Phase 2, and disclosed rather than quietly patched because it shaped the QA "
         "pipeline. Found by inspecting real generated answers, not by assumption; fixed narrowly, "
@@ -1280,11 +1308,12 @@ ENHANCEMENTS = [
         "CI hardening — Python 3.11 + 3.12 matrix, concurrency cancellation, enforced ≥80% "
         "coverage gate, coverage.xml artefact, and an opt-in `live` job that installs Ollama and "
         "runs the real-model tests in CI",
-        "The approved scope was \"a workflow that runs the suite\", which was the mid-term state. "
+        'The approved scope was "a workflow that runs the suite", which was the mid-term state. '
         "This goes further: CI now reproduces the MEASUREMENT (the coverage gate fails the build, "
-        "so the Section 6 figure cannot silently rot), proves the code on two interpreter versions, "
-        "and can exercise the live-model integration path on demand rather than only the offline "
-        "one. Cancelling superseded runs also keeps the free tier well inside its limits.",
+        "so the Section 6 figure cannot silently rot), proves the code on two interpreter "
+        "versions, and can exercise the live-model integration path on demand rather than "
+        "only the offline one. Cancelling superseded runs also keeps the free tier well inside "
+        "its limits.",
         "Done",
         "₹0",
         "EV-21  (.github/workflows/ci.yml)",

@@ -7,17 +7,17 @@
         "data-platform"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_141123_g9gremvx",
-      "run_id": "run_20260714_141123_cyc8nkb1",
+      "execution_id": "exec_20261013_093038_bh89opg9",
+      "run_id": "run_20261013_093038_noumriq6",
       "error": "",
       "domains": [
         "data-platform"
       ],
-      "answer": "Yes, yesterday's sales ETL pipeline ran successfully. Run #99102 completed on 2026-07-11T02:14:00Z with a successful result and 1279884 records written.",
+      "answer": "The sales_etl pipeline run #99102, which started on 2026-07-11T02:14:00Z, completed successfully. It returned 1279884 records written.",
       "citations": [
         "Databricks Job #4821 (sales_etl) run #99102"
       ],
-      "seconds": 70.4
+      "seconds": 106.8
     },
     {
       "id": 2,
@@ -26,17 +26,17 @@
         "data-platform"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_141241_mqlvknj3",
-      "run_id": "run_20260714_141241_v6ornsqg",
+      "execution_id": "exec_20261013_093236_hw2cf79a",
+      "run_id": "run_20261013_093236_jfo55gmt",
       "error": "",
       "domains": [
         "data-platform"
       ],
-      "answer": "The last failed Databricks job was job 4822, named \u2018ingestion_raw_events\u2019, run #99150. The error message indicates a \u2018SchemaMismatchException\u2019 due to a column having an unexpected IntegerType instead of StringType in the source file \u201cs3://psiog-raw/events/2026-07-12/part-0007.parquet\u201d.",
+      "answer": "The last failed Databricks job was job #4822 (ingestion_raw_events) run #99150. The error message was \u2018SchemaMismatchException: column \u2018customer_tier\u2019 expected StringType but found IntegerType in source file s3://psiog-raw/events/2026-07-12/part-0007.parquet\u2019.",
       "citations": [
         "Databricks Job #4822 (ingestion_raw_events) run #99150"
       ],
-      "seconds": 82.1
+      "seconds": 84.9
     },
     {
       "id": 3,
@@ -45,17 +45,17 @@
         "devops"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_141414_omi6no7o",
-      "run_id": "run_20260714_141414_2tuh77rj",
+      "execution_id": "exec_20261013_093407_7n2zp0s9",
+      "run_id": "run_20261013_093407_0zd6tv1k",
       "error": "",
       "domains": [
         "devops"
       ],
-      "answer": "Yes, the latest deployment of the payments service passed all quality gates. The shows that the unit-tests, code-coverage, Sonarqube, security-scan, and integration-tests all passed.",
+      "answer": "Yes, the latest deployment of the payments service, workflow-run #5512 (commit a1f9c34) passed all quality gates. The unit-tests, code-coverage, sonarqube, security-scan, and integration-tests all passed according to GitHub Actions run #5512.",
       "citations": [
         "GitHub Actions run #5512 (deploy-payments, commit a1f9c34)"
       ],
-      "seconds": 77.1
+      "seconds": 80.7
     },
     {
       "id": 4,
@@ -64,17 +64,17 @@
         "devops"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_141538_39ycscfa",
-      "run_id": "run_20260714_141538_k3btfwtn",
+      "execution_id": "exec_20261013_093537_v69s815p",
+      "run_id": "run_20261013_093537_9hm0s20c",
       "error": "",
       "domains": [
         "devops"
       ],
-      "answer": "The last deployment date for the auth service was 2026-07-09T11:05:00Z. All quality gates passed during this deployment, including unit tests, code coverage (83% against an 80% threshold), and the security scan which found no high/critical CVEs.",
+      "answer": "The last deployment date for the auth service was 2026-07-09T11:05:00Z. This deployment passed all quality gates, including unit-tests, code-coverage (83% threshold 80%), and the security-scan which found no high/critical CVEs.",
       "citations": [
         "GitHub Actions run #5498 (deploy-auth, commit 7de2b10)"
       ],
-      "seconds": 86.5
+      "seconds": 79.9
     },
     {
       "id": 5,
@@ -83,18 +83,18 @@
         "crm"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_141715_68sxegi6",
-      "run_id": "run_20260714_141715_6kn0k0f7",
+      "execution_id": "exec_20261013_093703_pet346s4",
+      "run_id": "run_20261013_093703_wjyvn61x",
       "error": "",
       "domains": [
         "crm"
       ],
-      "answer": "The current deal status for Acme Corp is Negotiation. The deal, DEAL-7781, is in the Negotiation stage and has an expected close date of 2026-08-30 [CRM deal DEAL-7781]. Divya Raman is the owner of this deal [CRM account ACC-1001].",
+      "answer": "The current deal status for Acme Corp is Negotiation, as indicated by DEAL-7781. The deal is owned by Divya Raman.",
       "citations": [
         "CRM account ACC-1001 (Acme Corp)",
         "CRM deal DEAL-7781 (Acme Corp)"
       ],
-      "seconds": 89.8
+      "seconds": 88.2
     },
     {
       "id": 6,
@@ -103,17 +103,17 @@
         "crm"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_141852_ebkaqo3h",
-      "run_id": "run_20260714_141852_5jq1gvy6",
+      "execution_id": "exec_20261013_093840_gzezzfym",
+      "run_id": "run_20261013_093840_zo6th6i3",
       "error": "",
       "domains": [
         "crm"
       ],
-      "answer": "The account owner for TechStart Ltd is Karthik Rao. This information is available in the CRM account record for ACC-1002. The last sync time for this record was 2026-07-11T04:02:00Z, and the record is currently stale.",
+      "answer": "The account owner for TechStart Ltd is Karthik Rao. This information is available in CRM account ACC-1002.",
       "citations": [
         "CRM account ACC-1002 (TechStart Ltd)"
       ],
-      "seconds": 85.3
+      "seconds": 83.7
     },
     {
       "id": 7,
@@ -122,19 +122,19 @@
         "docs"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260903_181908_i4xiuaut",
-      "run_id": "run_20260903_181908_252dbkyd",
+      "execution_id": "exec_20261013_094012_xcuwhxg0",
+      "run_id": "run_20261013_094012_vwym0lx2",
       "error": "",
       "domains": [
         "docs"
       ],
-      "answer": "If the `deploy-ingestion` pipeline fails its integration-test gate for a schema contract, check whether the corresponding ingestion job is also failing. The failure often indicates a disagreement between the service and the data platform regarding a column type, frequently related to the `customer_tier` column. If re-running job 4822 fails a second time, escalate to the Data Platform on-call and page the schema owner.",
+      "answer": "If the `deploy-ingestion` pipeline fails its integration-test gate for a schema contract, check whether the corresponding ingestion job is also failing. The failure is often due to an upstream producer changing a column type without schema review, specifically with `customer_tier`. If re-running job 4822 fails a second time, escalate to the Data Platform on-call and page the schema owner.",
       "citations": [
         "runbook-12-schema-mismatch.md \u00a7 Cause",
         "runbook-05-deployment-quality-gates.md \u00a7 When a Gate Fails",
         "runbook-12-schema-mismatch.md \u00a7 Escalation"
       ],
-      "seconds": 181.2
+      "seconds": 134.2
     },
     {
       "id": 8,
@@ -143,19 +143,19 @@
         "docs"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_144845_mo16pl3y",
-      "run_id": "run_20260714_144845_lyhajy1c",
+      "execution_id": "exec_20261013_094238_kh7f0ki5",
+      "run_id": "run_20261013_094238_zm7wto1i",
       "error": "",
       "domains": [
         "docs"
       ],
-      "answer": "The ingestion pipeline lands raw product and sales events into the Databricks lakehouse and promotes them through a three-layer medallion architecture. It has SLAs for bronze ingestion within 4 hours of file arrival, sales mart (gold) available by 03:00 daily, and CRM sync complete by 04:30 daily. The pipeline uses a schema-contract test to prevent bad data from reaching the platform.",
+      "answer": "The ingestion pipeline lands raw product and sales events into the Databricks lakehouse and promotes them through a three-layer medallion architecture. The pipeline includes the `deploy-ingestion` run 5530, which is subject to schema-contract testing. It has SLAs for bronze ingestion within 4 hours of file arrival and CRM sync complete by 04:30 daily.",
       "citations": [
         "architecture-ingestion-pipeline.md \u00a7 Overview",
         "runbook-12-schema-mismatch.md \u00a7 Prevention",
         "architecture-ingestion-pipeline.md \u00a7 SLAs"
       ],
-      "seconds": 115.2
+      "seconds": 105.7
     },
     {
       "id": 9,
@@ -165,19 +165,21 @@
         "data-platform"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260903_182225_ak7wxnxf",
-      "run_id": "run_20260903_182225_hjjvffnp",
+      "execution_id": "exec_20261013_094433_uefpi8xb",
+      "run_id": "run_20261013_094433_1n5lg1ip",
       "error": "",
       "domains": [
         "crm",
         "data-platform"
       ],
-      "answer": "Yesterday\u2019s pipeline failure impacted a CRM customer sync. The `crm_sync` job run #99163 terminated with an error indicating that the bronze.raw_events table was not refreshed by job 4822 (ingestion_raw_events), resulting in zero rows synced to CRM. Consequently, the remains at the Negotiation stage, owned by Divya Raman.",
+      "answer": "Last night\u2019s pipeline failure impacted CRM customer synchronization. The `crm_sync` job run #99163 failed due to an upstream dependency issue \u2013 the `bronze.raw_events` table was not refreshed by job 4822 (ingestion_raw_events), resulting in no data being synced to the CRM Citation. As a result, the sync status for accounts ACC-1001 (Acme Corp), ACC-1002 (TechStart Ltd) and ACC-1003 (Northwind Retail) is stale, with the last sync time recorded as 2026-07-11T04:02:00Z Citation.",
       "citations": [
         "Databricks Job #4830 (crm_sync) run #99163",
-        "CRM account ACC-1001 (Acme Corp)"
+        "CRM account ACC-1001 (Acme Corp)",
+        "CRM account ACC-1002 (TechStart Ltd)",
+        "CRM account ACC-1003 (Northwind Retail)"
       ],
-      "seconds": 444.7
+      "seconds": 397.4
     },
     {
       "id": 10,
@@ -187,22 +189,20 @@
         "docs"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260903_183031_6f9v61d6",
-      "run_id": "run_20260903_183031_2bp0qc8t",
+      "execution_id": "exec_20261013_095146_emvif63h",
+      "run_id": "run_20261013_095146_axqbluya",
       "error": "",
       "domains": [
         "data-platform",
         "docs"
       ],
-      "answer": "The ingestion job `ingestion_raw_events` failed on 2026-07-12 due to a `SchemaMismatchException` in the `s3://psiog-raw/events/2026-07-12/part-0007.parquet` file. To resolve this, the recommended action is to move the problematic partition to `s3://psiog-raw/quarantine/<date>/` and re-run job 4822 from the Databricks Jobs UI. Following this, job 4830 (`crm_sync`) should be manually re-run to refresh the CRM.",
+      "answer": "The ingestion job `ingestion_raw_events` failed on 2026-07-12 due to a `SchemaMismatchException` in the `s3://psiog-raw/events/2026-07-12/part-0007.parquet` file. To resolve this, you should first quarantine the bad partition by moving it to `s3://psiog-raw/quarantine/<date>/` as outlined in the recovery steps. Following this, re-run job 4822 from the Databricks Jobs UI. After 4822 succeeds, manually re-run job 4830 (`crm_sync`) to refresh the CRM.",
       "citations": [
         "Databricks Job #4822 (ingestion_raw_events) run #99150",
         "incident-2026-07-12-ingestion-failure.md \u00a7 Actions",
-        "runbook-12-schema-mismatch.md \u00a7 Recovery Steps",
-        "incident-2026-07-12-ingestion-failure.md \u00a7 Known Issues",
-        "runbook-12-schema-mismatch.md \u00a7 Symptom"
+        "runbook-12-schema-mismatch.md \u00a7 Recovery Steps"
       ],
-      "seconds": 506.9
+      "seconds": 218.9
     },
     {
       "id": 11,
@@ -212,21 +212,21 @@
         "docs"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_145520_dxtvhyol",
-      "run_id": "run_20260714_145520_vrwcblzj",
+      "execution_id": "exec_20261013_095545_hkow1b8j",
+      "run_id": "run_20261013_095545_xi02izzt",
       "error": "",
       "domains": [
         "devops",
         "docs"
       ],
-      "answer": "The latest deployment failed due to a code coverage gate failing at 74% and three schema contract test failures for the `customer_tier` field. Additionally, the `ingestion_raw_events` job failed on 2026-07-12 due to a `SchemaMismatchException` related to the `customer_tier` column, which triggered a failure in the `crm_sync` job and resulted in stale CRM records as of 2026-07-11. The payments and auth service deployments themselves were successful, with all quality gates passing. All five quality gates must pass for a service deployment to be promoted as of 2026-07-14.",
+      "answer": "The latest deployment attempt failed due to a code-coverage gate failure at 74%, falling short of the 80% threshold. Following this, a related issue arose with Job 4822 (`ingestion_raw_events`) on 2026-07-12, causing a `SchemaMismatchException` for the `customer_tier` column and subsequently impacting the CRM with stale account records as of 2026-07-11. The payments service deployment, run #5512, was successful, as was the auth service deployment, run #5498.",
       "citations": [
         "GitHub Actions run #5512 (deploy-payments, commit a1f9c34)",
         "GitHub Actions run #5498 (deploy-auth, commit 7de2b10)",
         "runbook-05-deployment-quality-gates.md \u00a7 The Gates",
         "incident-2026-07-12-ingestion-failure.md \u00a7 Summary"
       ],
-      "seconds": 409.5
+      "seconds": 377.9
     },
     {
       "id": 12,
@@ -238,8 +238,8 @@
         "docs"
       ],
       "status": "succeeded",
-      "execution_id": "exec_20260714_150256_x4r81cqa",
-      "run_id": "run_20260714_150256_ucqqco34",
+      "execution_id": "exec_20261013_100238_uv6hnidw",
+      "run_id": "run_20261013_100238_a3z7pbxf",
       "error": "",
       "domains": [
         "crm",
@@ -247,7 +247,7 @@
         "devops",
         "docs"
       ],
-      "answer": "As of today, July 14, 2026, the `sales_etl` job (ID 4821) ran successfully twice, processing 1,284,502 and 1,279,884 records respectively. However, the `crm_sync` job (ID 4830) failed due to a dependency issue with the `ingestion_raw_events` job (ID 4822), stemming from a schema mismatch, and this job did not auto-retry. Furthermore, the `deploy-ingestion` workflow (run #5530) for the ingestion-service failed due to failing quality gates, specifically a low code-coverage score and integration test failures. The `deploy-payments` and `deploy-auth` workflows were successful and. Finally, deal DEAL-7781 within Acme Corp (ACC-1001) remains in the Negotiation stage.",
+      "answer": "The recent data pipeline activity shows the `sales_etl` job completed successfully twice on July 12th and 11th, processing significant volumes of records. However, the `crm_sync` job failed on July 12th due to a failure in the `ingestion_raw_events` job, specifically a `SchemaMismatchException`. Deployment of the ingestion service failed due to a code-coverage gate and integration test failures related to customer_tier schema contracts. The payments and auth services deployed successfully with passing quality gates. Furthermore, the `crm_sync` job does not automatically retry after upstream failures and requires manual re-runs, as detailed in the known issues.",
       "citations": [
         "Databricks Job #4830 (crm_sync) run #99163",
         "Databricks Job #4821 (sales_etl) run #99141",
@@ -259,7 +259,7 @@
         "CRM account ACC-1001 (Acme Corp)",
         "incident-2026-07-12-ingestion-failure.md \u00a7 Known Issues"
       ],
-      "seconds": 703.6
+      "seconds": 554.7
     }
   ]
 }

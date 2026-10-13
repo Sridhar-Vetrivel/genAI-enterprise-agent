@@ -90,6 +90,17 @@ class Settings:
     agentfield_execute_path: str = field(
         default_factory=lambda: _env("AGENTFIELD_EXECUTE_PATH", "/api/v1/execute")
     )
+    # Pull-based history capture (see scripts/execution_history.py): confirmed live on this
+    # control-plane image that `POST /api/v1/settings/webhooks` 404s and the SSE stream at
+    # `/api/ui/v1/executions/events` never responds, despite both being documented in the
+    # control plane's own knowledge base. These two DO respond, so history is pulled, not
+    # pushed. The dag path takes `run_id`, the executions path takes an `execution_id`.
+    agentfield_dag_path: str = field(
+        default_factory=lambda: _env("AGENTFIELD_DAG_PATH", "/api/ui/v1/workflows/{run_id}/dag")
+    )
+    agentfield_executions_path: str = field(
+        default_factory=lambda: _env("AGENTFIELD_EXECUTIONS_PATH", "/api/v1/executions")
+    )
 
     # ---------------- Agent node ids ----------------
     node_coordinator: str = field(default_factory=lambda: _env("NODE_COORDINATOR", "coordinator"))
@@ -188,6 +199,18 @@ class Settings:
     )
     # Per-query evidence pages for the mid-term Evidence Pack (`make evidence`).
     evidence_dir: Path = field(default_factory=lambda: _path("EVIDENCE_DIR", "docs/qa"))
+    # Durable execution history (see scripts/execution_history.py). Outlives the control
+    # plane: confirmed live that the control plane itself drops execution records within
+    # weeks, so these two files -- not AgentField's own store -- are what still has the
+    # answer three to six months from now.
+    history_db_path: Path = field(
+        default_factory=lambda: _path("EXECUTION_HISTORY_DB_PATH", "data/execution_history.db")
+    )
+    history_export_path: Path = field(
+        default_factory=lambda: _path(
+            "EXECUTION_HISTORY_EXPORT_PATH", "data/execution_history.json"
+        )
+    )
 
     @property
     def databricks_runs_url(self) -> str:

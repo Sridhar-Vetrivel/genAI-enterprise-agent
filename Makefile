@@ -92,6 +92,12 @@ agents-status:  ## Check whether all 5 nodes are still serving
 agents-down:  ## Stop the 5 agent nodes
 	@pkill -f "$(PY) -m agents\." 2>/dev/null && echo "agents stopped" || echo "no agents running"
 
+history:  ## Pull every traced run's full DAG into data/execution_history.db (survives the control plane)
+	@$(PY) -m scripts.execution_history --from-manifest
+
+history-list:  ## Print the durable execution history recorded so far
+	@$(PY) -m scripts.execution_history --list
+
 clean:
 	rm -rf .pytest_cache .coverage .ruff_cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

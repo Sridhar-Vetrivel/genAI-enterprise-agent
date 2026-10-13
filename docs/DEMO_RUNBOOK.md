@@ -291,6 +291,14 @@ QA EVIDENCE      make qa-summary               # routing 100%, hallucination 3.6
 SHUTDOWN         make agents-down && make down
 ```
 
+
+```text
+Example
+make ask
+> What was the error in the last failed Databricks job?
+> Who is the account owner for TechStart Ltd?
+```
+
 **Headline results:** routing **100%** · hallucination **3.64%** (target <10%) · coverage
 **93.11%** · **5** distinct agents · **12/12** queries grounded and cited · cost **₹0** (fully
 local). See `docs/qa/traces.md` for the per-query control-plane execution IDs.

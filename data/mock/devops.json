@@ -50,6 +50,157 @@
         {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"},
         {"name": "integration-tests", "status": "failed", "detail": "3 failed: schema contract test for customer_tier expects StringType"}
       ]
+    },
+    {
+      "run_id": 5480,
+      "service": "payments-service",
+      "workflow_name": "deploy-payments",
+      "commit_sha": "9bd2e41",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-07-02T10:00:00Z",
+      "actor": "priya.n",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "405 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "85% (threshold 80%)"},
+        {"name": "sonarqube", "status": "passed", "detail": "0 blocker, 3 minor issues"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"},
+        {"name": "integration-tests", "status": "passed", "detail": "56 passed, 0 failed"}
+      ]
+    },
+    {
+      "run_id": 5465,
+      "service": "auth-service",
+      "workflow_name": "deploy-auth",
+      "commit_sha": "6af0c92",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-06-28T11:00:00Z",
+      "actor": "arjun.k",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "225 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "82% (threshold 80%)"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"}
+      ]
+    },
+    {
+      "run_id": 5500,
+      "service": "ingestion-service",
+      "workflow_name": "deploy-ingestion",
+      "commit_sha": "e71a309",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-07-05T09:30:00Z",
+      "actor": "meera.s",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "178 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "81% (threshold 80%)"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"},
+        {"name": "integration-tests", "status": "passed", "detail": "61 passed, 0 failed"}
+      ]
+    },
+    {
+      "run_id": 5560,
+      "service": "notifications-service",
+      "workflow_name": "deploy-notifications",
+      "commit_sha": "b204f17",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-07-08T14:30:00Z",
+      "actor": "rohit.v",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "140 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "84% (threshold 80%)"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"},
+        {"name": "integration-tests", "status": "passed", "detail": "22 passed, 0 failed"}
+      ]
+    },
+    {
+      "run_id": 5541,
+      "service": "notifications-service",
+      "workflow_name": "deploy-notifications",
+      "commit_sha": "8e63a05",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-07-01T14:00:00Z",
+      "actor": "rohit.v",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "138 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "83% (threshold 80%)"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"}
+      ]
+    },
+    {
+      "run_id": 5575,
+      "service": "billing-service",
+      "workflow_name": "deploy-billing",
+      "commit_sha": "f3a9c88",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "failure",
+      "deployed_at": "2026-07-06T18:40:00Z",
+      "actor": "sneha.k",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "198 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "80% (threshold 80%)"},
+        {"name": "security-scan", "status": "failed", "detail": "1 high CVE found in payment-sdk dependency (CVE-2026-31122)"},
+        {"name": "integration-tests", "status": "passed", "detail": "40 passed, 0 failed"}
+      ]
+    },
+    {
+      "run_id": 5552,
+      "service": "billing-service",
+      "workflow_name": "deploy-billing",
+      "commit_sha": "2c88b4e",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-06-29T09:00:00Z",
+      "actor": "sneha.k",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "196 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "81% (threshold 80%)"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"}
+      ]
+    },
+    {
+      "run_id": 5588,
+      "service": "api-gateway-service",
+      "workflow_name": "deploy-api-gateway",
+      "commit_sha": "d5f072b",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-07-08T13:05:00Z",
+      "actor": "karthik.r",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "260 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "88% (threshold 80%)"},
+        {"name": "sonarqube", "status": "passed", "detail": "0 blocker, 1 minor issue"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"},
+        {"name": "integration-tests", "status": "passed", "detail": "70 passed, 0 failed"}
+      ]
+    },
+    {
+      "run_id": 5566,
+      "service": "api-gateway-service",
+      "workflow_name": "deploy-api-gateway",
+      "commit_sha": "a08e3c1",
+      "branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "deployed_at": "2026-07-03T16:20:00Z",
+      "actor": "karthik.r",
+      "quality_gates": [
+        {"name": "unit-tests", "status": "passed", "detail": "255 passed, 0 failed"},
+        {"name": "code-coverage", "status": "passed", "detail": "87% (threshold 80%)"},
+        {"name": "security-scan", "status": "passed", "detail": "no high/critical CVEs"}
+      ]
     }
   ]
 }

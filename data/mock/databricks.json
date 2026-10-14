@@ -20,6 +20,27 @@
       "description": "Pushes the curated customer table to the CRM",
       "schedule": "0 4 * * *",
       "owner": "data-platform@psiog.example"
+    },
+    {
+      "job_id": 4841,
+      "name": "marketing_campaign_sync",
+      "description": "Nightly sync of campaign performance data into the marketing mart",
+      "schedule": "30 3 * * *",
+      "owner": "data-platform@psiog.example"
+    },
+    {
+      "job_id": 4852,
+      "name": "inventory_reconciliation",
+      "description": "Reconciles warehouse inventory counts against POS systems",
+      "schedule": "0 1 * * *",
+      "owner": "data-platform@psiog.example"
+    },
+    {
+      "job_id": 4863,
+      "name": "customer_health_score",
+      "description": "Computes daily customer health scores from usage and support signals",
+      "schedule": "0 5 * * *",
+      "owner": "data-platform@psiog.example"
     }
   ],
   "runs": [
@@ -70,6 +91,150 @@
       "duration_seconds": 1492,
       "error_message": null,
       "records_written": 1279884
+    },
+    {
+      "run_id": 99065,
+      "job_id": 4821,
+      "job_name": "sales_etl",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-10T02:14:00Z",
+      "end_time": "2026-07-10T02:38:40Z",
+      "duration_seconds": 1480,
+      "error_message": null,
+      "records_written": 1271200
+    },
+    {
+      "run_id": 99031,
+      "job_id": 4821,
+      "job_name": "sales_etl",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-09T02:13:00Z",
+      "end_time": "2026-07-09T02:37:51Z",
+      "duration_seconds": 1491,
+      "error_message": null,
+      "records_written": 1268900
+    },
+    {
+      "run_id": 99058,
+      "job_id": 4822,
+      "job_name": "ingestion_raw_events",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-10T20:04:00Z",
+      "end_time": "2026-07-10T20:06:45Z",
+      "duration_seconds": 165,
+      "error_message": null,
+      "records_written": 842110
+    },
+    {
+      "run_id": 99022,
+      "job_id": 4822,
+      "job_name": "ingestion_raw_events",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-10T16:04:00Z",
+      "end_time": "2026-07-10T16:06:51Z",
+      "duration_seconds": 171,
+      "error_message": null,
+      "records_written": 835500
+    },
+    {
+      "run_id": 99071,
+      "job_id": 4830,
+      "job_name": "crm_sync",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-11T04:00:00Z",
+      "end_time": "2026-07-11T04:01:22Z",
+      "duration_seconds": 82,
+      "error_message": null,
+      "records_written": 1279884
+    },
+    {
+      "run_id": 99040,
+      "job_id": 4830,
+      "job_name": "crm_sync",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-10T04:00:00Z",
+      "end_time": "2026-07-10T04:01:19Z",
+      "duration_seconds": 79,
+      "error_message": null,
+      "records_written": 1271200
+    },
+    {
+      "run_id": 98910,
+      "job_id": 4841,
+      "job_name": "marketing_campaign_sync",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-09T03:30:00Z",
+      "end_time": "2026-07-09T03:34:12Z",
+      "duration_seconds": 252,
+      "error_message": null,
+      "records_written": 53980
+    },
+    {
+      "run_id": 98930,
+      "job_id": 4841,
+      "job_name": "marketing_campaign_sync",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-10T03:30:00Z",
+      "end_time": "2026-07-10T03:34:28Z",
+      "duration_seconds": 268,
+      "error_message": null,
+      "records_written": 54210
+    },
+    {
+      "run_id": 98875,
+      "job_id": 4852,
+      "job_name": "inventory_reconciliation",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-08T01:00:00Z",
+      "end_time": "2026-07-08T01:11:20Z",
+      "duration_seconds": 680,
+      "error_message": null,
+      "records_written": 18340
+    },
+    {
+      "run_id": 98940,
+      "job_id": 4852,
+      "job_name": "inventory_reconciliation",
+      "state": "TERMINATED",
+      "result_state": "FAILED",
+      "start_time": "2026-07-10T01:00:00Z",
+      "end_time": "2026-07-10T01:09:04Z",
+      "duration_seconds": 544,
+      "error_message": "ReconciliationMismatchException: 214 SKUs differ between warehouse and POS counts beyond the 0.5% tolerance",
+      "records_written": 0
+    },
+    {
+      "run_id": 98890,
+      "job_id": 4863,
+      "job_name": "customer_health_score",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-09T05:00:00Z",
+      "end_time": "2026-07-09T05:02:40Z",
+      "duration_seconds": 160,
+      "error_message": null,
+      "records_written": 3185
+    },
+    {
+      "run_id": 98950,
+      "job_id": 4863,
+      "job_name": "customer_health_score",
+      "state": "TERMINATED",
+      "result_state": "SUCCESS",
+      "start_time": "2026-07-10T05:00:00Z",
+      "end_time": "2026-07-10T05:02:55Z",
+      "duration_seconds": 175,
+      "error_message": null,
+      "records_written": 3210
     }
   ]
 }

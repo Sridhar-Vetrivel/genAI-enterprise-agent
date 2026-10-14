@@ -157,7 +157,7 @@ class TestCRMMocked:
         assert await CRMClient().find_deals("Nonexistent Ltd") == []
 
     async def test_no_filter_returns_everything(self) -> None:
-        assert len(await CRMClient().find_deals()) == 3
+        assert len(await CRMClient().find_deals()) == 7
 
     async def test_fetch_bundles_accounts_deals_and_contacts(self) -> None:
         records, citations = await CRMClient().fetch("acme")

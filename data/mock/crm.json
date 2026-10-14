@@ -29,6 +29,46 @@
       "last_synced_at": "2026-07-12T04:02:00Z",
       "sync_status": "current",
       "sync_note": "Synced from a cached partition before the crm_sync failure."
+    },
+    {
+      "account_id": "ACC-1004",
+      "name": "Orion Logistics",
+      "owner": "Karthik Rao",
+      "industry": "Logistics",
+      "tier": "mid-market",
+      "last_synced_at": "2026-07-10T04:02:00Z",
+      "sync_status": "current",
+      "sync_note": "Synced on schedule; no sync issues."
+    },
+    {
+      "account_id": "ACC-1005",
+      "name": "BrightWave Media",
+      "owner": "Divya Raman",
+      "industry": "Media",
+      "tier": "enterprise",
+      "last_synced_at": "2026-07-10T04:02:00Z",
+      "sync_status": "current",
+      "sync_note": "Synced on schedule; no sync issues."
+    },
+    {
+      "account_id": "ACC-1006",
+      "name": "Sundar Agro Exports",
+      "owner": "Karthik Rao",
+      "industry": "Agriculture",
+      "tier": "mid-market",
+      "last_synced_at": "2026-07-09T04:02:00Z",
+      "sync_status": "current",
+      "sync_note": "Synced on schedule; no sync issues."
+    },
+    {
+      "account_id": "ACC-1007",
+      "name": "Meridian Health",
+      "owner": "Divya Raman",
+      "industry": "Healthcare",
+      "tier": "enterprise",
+      "last_synced_at": "2026-07-10T04:02:00Z",
+      "sync_status": "current",
+      "sync_note": "Synced on schedule; no sync issues."
     }
   ],
   "deals": [
@@ -67,6 +107,54 @@
       "expected_close": "2026-06-28",
       "last_activity": "2026-06-28T16:20:00Z",
       "last_activity_note": "Contract signed; onboarding kicked off."
+    },
+    {
+      "deal_id": "DEAL-7820",
+      "account_id": "ACC-1004",
+      "account_name": "Orion Logistics",
+      "stage": "Discovery",
+      "amount_inr": 650000,
+      "owner": "Karthik Rao",
+      "probability": 20,
+      "expected_close": "2026-10-20",
+      "last_activity": "2026-07-05T11:30:00Z",
+      "last_activity_note": "Initial discovery call completed; sending capability deck."
+    },
+    {
+      "deal_id": "DEAL-7835",
+      "account_id": "ACC-1005",
+      "account_name": "BrightWave Media",
+      "stage": "Negotiation",
+      "amount_inr": 3100000,
+      "owner": "Divya Raman",
+      "probability": 60,
+      "expected_close": "2026-08-15",
+      "last_activity": "2026-07-09T10:15:00Z",
+      "last_activity_note": "Redlines exchanged on MSA; legal review in progress."
+    },
+    {
+      "deal_id": "DEAL-7850",
+      "account_id": "ACC-1006",
+      "account_name": "Sundar Agro Exports",
+      "stage": "Closed Lost",
+      "amount_inr": 900000,
+      "owner": "Karthik Rao",
+      "probability": 0,
+      "expected_close": "2026-07-01",
+      "last_activity": "2026-06-30T15:00:00Z",
+      "last_activity_note": "Prospect selected a competitor on pricing."
+    },
+    {
+      "deal_id": "DEAL-7861",
+      "account_id": "ACC-1007",
+      "account_name": "Meridian Health",
+      "stage": "Proposal Sent",
+      "amount_inr": 5200000,
+      "owner": "Divya Raman",
+      "probability": 50,
+      "expected_close": "2026-09-30",
+      "last_activity": "2026-07-09T17:40:00Z",
+      "last_activity_note": "Proposal shared with procurement; technical deep-dive scheduled."
     }
   ],
   "contacts": [
@@ -87,6 +175,33 @@
       "title": "Head of Procurement",
       "email": "ananya.iyer@techstart.example",
       "last_contacted": "2026-07-08T09:10:00Z"
+    },
+    {
+      "contact_id": "CON-530",
+      "account_id": "ACC-1004",
+      "account_name": "Orion Logistics",
+      "name": "Vikram Shah",
+      "title": "Director of Operations",
+      "email": "vikram.shah@orionlogistics.example",
+      "last_contacted": "2026-07-05T11:30:00Z"
+    },
+    {
+      "contact_id": "CON-541",
+      "account_id": "ACC-1005",
+      "account_name": "BrightWave Media",
+      "name": "Meera Pillai",
+      "title": "VP Finance",
+      "email": "meera.pillai@brightwavemedia.example",
+      "last_contacted": "2026-07-09T10:15:00Z"
+    },
+    {
+      "contact_id": "CON-552",
+      "account_id": "ACC-1007",
+      "account_name": "Meridian Health",
+      "name": "Arjun Nair",
+      "title": "Chief Information Officer",
+      "email": "arjun.nair@meridianhealth.example",
+      "last_contacted": "2026-07-09T17:40:00Z"
     }
   ]
 }

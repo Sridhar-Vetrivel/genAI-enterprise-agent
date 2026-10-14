@@ -66,6 +66,9 @@ evidence:  ## Regenerate docs/qa/ (one evidence page per test query) from the QA
 ask:  ## Ask the copilot one question:  make ask Q="did the sales etl run?"
 	@$(PY) -m psiog_kendra.cli "$(Q)"
 
+web:  ## Chat-style web UI, in-process (needs: ollama serve + make index). http://localhost:8090
+	@$(PY) -m uvicorn psiog_kendra.web:app --host 0.0.0.0 --port 8090
+
 up:  ## Start the AgentField control plane
 	docker compose -f deploy/docker-compose.yml up -d
 	@echo "control plane: $${AGENTFIELD_SERVER:-http://localhost:8080}"

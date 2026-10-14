@@ -18,11 +18,19 @@ that surprises everyone the first time.
 | Track | Command surface | Needs control plane? | Best for |
 |---|---|---|---|
 | **A — Quick CLI** | `make ask Q="…"` | **No** — runs in-process | A fast "it works, and it cites" moment |
+| **A′ — Chat web UI** | `make web`, then `http://localhost:8090` | **No** — same in-process path as A | A panel that would rather click than type a Makefile command |
 | **B — Full architecture** | `make up && make agents`, then the UI at `http://localhost:8080/ui/` | **Yes** | Showing the 5 distinct agents, routing, and the cross-domain DAG |
 
-Track B is the real showpiece — it proves the *multi-agent* claim. Track A is the fastest way to
-show a grounded, cited answer without waiting on the control plane. **Do both**: A to warm up, B
-for the architecture.
+Track B is the real showpiece — it proves the *multi-agent* claim. Track A (CLI or web) is the
+fastest way to show a grounded, cited answer without waiting on the control plane. **Do both**: A
+to warm up, B for the architecture.
+
+Track A′ is a thin FastAPI wrapper around the exact same `Coordinator.ask()` call Track A makes —
+no new routing, no new grounding logic, just a ChatGPT/Claude-style chat page in front of it. One
+question is answered at a time (`asyncio.Lock`): a second question queues rather than racing the
+first for `gemma3:4b`'s ~4 GiB, per the RAM note in §7. The page states the real CPU-inference
+pacing (2–4 min single-domain, 8–15 min cross-domain) up front, with a live elapsed-time counter
+while it waits, so "is it frozen?" never comes up mid-demo.
 
 ---
 
@@ -70,7 +78,7 @@ the offline suite and the in-process CLI (Track A) read.
 make cov
 ```
 
-Expect **`415 passed`** and **`Total coverage: 93.11%`**. If this is green, the code is sound
+Expect **`431 passed`** and **`Total coverage: 93.28%`**. If this is green, the code is sound
 before you involve any model.
 
 ---
@@ -205,16 +213,16 @@ make qa-summary
 
 ```
   Routing accuracy        : 100.0%  ✅ PASS   (target 100%)
-  Answers with citations  : 10/10
-  HALLUCINATION RATE      : 3.64%  ✅ PASS   (target <10%)
-    = (2 ungrounded / 55 claims) x 100
+  Answers with citations  : 12/12
+  HALLUCINATION RATE      : 5.56%  ✅ PASS   (target <10%)
+    = (3 ungrounded / 54 claims) x 100
 ```
 
 Three headline numbers, all measured:
 - **Routing accuracy 100%** (12/12, verified through the live control plane — see
   `docs/qa/traces.md`)
-- **Hallucination rate 3.64%** (target <10%)
-- **Test coverage 93.11%** (`make cov`)
+- **Hallucination rate 5.56%** (target <10%)
+- **Test coverage 93.28%** (`make cov`)
 
 > To re-grade from scratch (~1 hour, ~60 local LLM calls): `make qa`. You do **not** need this for
 > a demo — `make qa-summary` reads the numbers already produced. Re-running would produce slightly
@@ -240,6 +248,50 @@ Q1–Q8 are single-domain; Q9–Q12 are cross-domain (the impressive ones for th
 | 10 | The ingestion job failed - is there a fix in the runbooks? | data-platform + docs |
 | 11 | What's the status of the latest deployment and are there any known issues? | devops + docs |
 | 12 | Give me a full status update - pipeline, deployments, and any open incidents | all four |
+
+### 7.1 Bonus queries — beyond the 12 (optional, for a longer session or Q&A)
+
+All grounded in the same mock data as the 12 above — nothing invented. Each group proves a
+different claim.
+
+**Re-phrased single-domain — proves LLM routing, not keyword matching (same intent, different
+words than Q1–Q8):**
+
+| Query | Routes to | Grounds in |
+|---|---|---|
+| Has the nightly sales ETL been healthy lately? | data-platform | `sales_etl` job #4821 |
+| Is anything broken in our CI pipelines right now? | devops | run #5530, `ingestion-service`, failed |
+| Who's the point of contact for Northwind Retail? | crm | ACC-1003, owner Divya Raman |
+| What happens when a deployment fails a quality gate? | docs | `runbook-05-deployment-quality-gates.md` |
+
+**New single-domain coverage — not asked by the original 12 at all:**
+
+| Query | Routes to | Grounds in |
+|---|---|---|
+| Is the auth service deployment current? | devops | run #5498, success, 2026-07-09 |
+| Is TechStart Ltd's CRM record up to date? | crm | ACC-1002, `sync_status: stale` |
+| What's the recovery procedure after the CRM sync failure? | data-platform + docs | job #4830 `crm_sync` + incident INC-2043 |
+
+**New cross-domain combos:**
+
+| Query | Routes to | Why it's worth asking |
+|---|---|---|
+| Is the Northwind Retail account healthy, and has anything affected it recently? | crm + docs | A **negative-case** demo — should find nothing in incidents. Not every cross-domain query has bad news, and the copilot shouldn't invent any. |
+| Did the ingestion failure affect any CRM accounts, and what does the incident report recommend? | data-platform + crm + docs | **Three** domains, not the usual two. |
+
+**The out-of-scope / small-talk fallback — worth demoing deliberately:**
+
+| Input | Expected response |
+|---|---|
+| "Hi there!" · "Good morning" · "Thanks!" | A friendly, on-brand reply — no forced domain, no citation |
+| "What's the weather today?" · "Write me a haiku" | A graceful decline: *"I don't have information to answer that…"* |
+
+This pair is the strongest demo moment in this bonus set: it shows the grounding discipline
+holds even on adversarial-ish input, not just the happy path. The coordinator used to force
+off-topic questions into a real domain and answer with a genuine-but-irrelevant citation — it
+looked grounded and was not. It now classifies intent for these honestly instead (one cheap
+`gemma3:1b` call, not a full specialist dispatch), so "Hi" gets a greeting and "what's the
+weather" gets a clean decline. Neither one invents a domain to answer from.
 
 ---
 
@@ -281,13 +333,13 @@ Ollama is a system service — leave it running. Nothing else needs stopping.
 
 ```text
 SETUP (once)     make install ; cp deploy/.env.example .env ; make index
-VERIFY OFFLINE   make cov                      # 415 passed, 93.11%
+VERIFY OFFLINE   make cov                      # 431 passed, 93.28%
 QUICK DEMO       make ask Q="…"                # in-process, ~2 min
 FULL STACK       make up && make agents        # control plane + 5 nodes
   fleet health   make agents-status            # all 5 serving AND routable
   the UI         http://localhost:8080/ui/
   run a query    curl … /api/v1/execute/coordinator.ask  (see §5.3)
-QA EVIDENCE      make qa-summary               # routing 100%, hallucination 3.64%
+QA EVIDENCE      make qa-summary               # routing 100%, hallucination 5.56%
 SHUTDOWN         make agents-down && make down
 ```
 
@@ -299,6 +351,6 @@ make ask
 > Who is the account owner for TechStart Ltd?
 ```
 
-**Headline results:** routing **100%** · hallucination **3.64%** (target <10%) · coverage
-**93.11%** · **5** distinct agents · **12/12** queries grounded and cited · cost **₹0** (fully
+**Headline results:** routing **100%** · hallucination **5.56%** (target <10%) · coverage
+**93.28%** · **5** distinct agents · **12/12** queries grounded and cited · cost **₹0** (fully
 local). See `docs/qa/traces.md` for the per-query control-plane execution IDs.

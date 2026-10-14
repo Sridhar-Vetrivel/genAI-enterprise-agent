@@ -18,6 +18,10 @@ dev = [
     "respx>=0.21",
     "ruff>=0.5",
 ]
+web = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
 
 [project.scripts]
 kendra = "psiog_kendra.cli:main"

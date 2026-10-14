@@ -20,7 +20,13 @@ from psiog_kendra.config import settings
 from psiog_kendra.domains import ALL_DOMAINS, agent_for, domain_catalog
 from psiog_kendra.llm import Complexity, LLMError, LLMGateway
 from psiog_kendra.prompting import finalize_synthesis
-from psiog_kendra.schemas import AgentResponse, CopilotResponse, RoutingDecision, SynthesisResult
+from psiog_kendra.schemas import (
+    AgentResponse,
+    CopilotResponse,
+    RoutingDecision,
+    SmallTalkCheck,
+    SynthesisResult,
+)
 
 ROUTING_SYSTEM = f"""You are the coordinator of the Psiog enterprise copilot.
 Classify the user's question and choose which specialist domain(s) must answer it.
@@ -67,8 +73,42 @@ Two phrases carry weight and are routinely missed:
    - "Give me a complete status update - jobs, releases, and anything open" -> all four,
      including crm, despite customers not appearing anywhere in the question.
 
+A question can genuinely match NONE of the four domains - a greeting ("hi", "thanks"),
+small talk, or a real question about something this copilot was never built to answer
+(the weather, a recipe, general trivia). Returning an empty domain list for one of these
+is the CORRECT answer, not a failure. Never pick a domain just to have picked one.
+
 Explain your choice in one sentence.
 """
+
+SMALL_TALK_SYSTEM = """A question did not match any of the Psiog copilot's four domains
+(data-platform, devops, crm, docs).
+
+Decide only this: is it a greeting or pleasantry, with no real question in it at all -
+rather than an actual question the copilot simply cannot answer? Set is_greeting
+accordingly. A casual TONE is not what decides this - an informally-phrased question is
+still a question.
+
+- "Hi" -> greeting (no question at all)
+- "Good morning!" -> greeting (no question at all)
+- "Thanks, that's helpful" -> greeting (no question at all)
+- "What's the weather like today?" -> NOT a greeting - it asks something, just not
+  something this copilot covers
+- "Can you write me a poem?" -> NOT a greeting - same reason
+
+Do not attempt to answer the question itself.
+"""
+
+GREETING_REPLY = (
+    "Hello! I'm Psiog Kendra, your enterprise copilot. Ask me about data pipelines, "
+    'deployments, CRM accounts, or internal documentation - for example, "Did '
+    "yesterday's ETL pipeline run successfully?\""
+)
+
+OUT_OF_SCOPE_REPLY = (
+    "I don't have information to answer that. I can only help with questions about "
+    "data pipelines, deployments, CRM accounts, or internal documentation."
+)
 
 SYNTHESIS_SYSTEM = """You are the coordinator of the Psiog enterprise copilot.
 Several specialist agents have each answered part of the user's question.
@@ -114,14 +154,20 @@ class Coordinator:
             raise LLMError(f"routing failed for query {query!r}: {exc}") from exc
 
         if not decision.domains:
-            # The model produced no usable domain. Ask once more, forcefully, rather than
-            # falling back to a keyword rule -- keyword routing is explicitly out of scope.
+            # One honest second look, not a coerced one: an earlier version of this retry
+            # told the model "you must return at least one domain", which forced a wrong
+            # pick on every genuinely out-of-scope question (a greeting, small talk, a
+            # topic none of the four domains cover) instead of trusting its first, correct
+            # answer. A real in-scope question can still be missed on the first pass, so
+            # it gets one more careful read -- but empty remains a legitimate outcome.
             decision = await self._llm.structured(
                 system=ROUTING_SYSTEM,
                 user=(
                     f"Question: {query}\n\n"
-                    f"You must return at least one domain from this exact list: "
-                    f"{', '.join(ALL_DOMAINS)}."
+                    f"On the first pass this matched no domain. Look again, carefully: "
+                    f"does it genuinely concern one of {', '.join(ALL_DOMAINS)}? If so, "
+                    f"name it. If this is a greeting, small talk, or a topic none of the "
+                    f"four domains cover, return an empty list -- that is still correct."
                 ),
                 schema=RoutingDecision,
                 complexity=Complexity.COMPLEX,
@@ -194,12 +240,49 @@ class Coordinator:
 
         return finalize_synthesis(result.answer, result.citations, citations)
 
+    async def _decline(self, query: str) -> str:
+        """A canned, non-hallucinated reply for a query that matched no domain.
+
+        The REPLY text is fixed, never LLM-authored - the classification deciding which
+        fixed reply to use is the only thing asked of the model, on the cheap SIMPLE
+        tier. If even that fails, defaulting to the out-of-scope wording is always a
+        true statement (a greeting genuinely isn't answerable either), so it degrades
+        safely rather than surfacing an error for what is, from the user's side, a
+        perfectly ordinary "hi".
+        """
+        try:
+            check = await self._llm.structured(
+                system=SMALL_TALK_SYSTEM,
+                user=f"Question: {query}",
+                schema=SmallTalkCheck,
+                complexity=Complexity.SIMPLE,
+            )
+        except LLMError:
+            return OUT_OF_SCOPE_REPLY
+        return GREETING_REPLY if check.is_greeting else OUT_OF_SCOPE_REPLY
+
     async def ask(self, query: str) -> CopilotResponse:
         """The full lifecycle: route -> dispatch -> synthesise."""
         decision = await self.route(query)
+
+        if not decision.domains:
+            # Routing genuinely found nothing to dispatch to - stop here. No specialist
+            # call, no synthesis call: an off-topic question should cost one cheap
+            # classification call, not the full pipeline "thinking hard" about an answer
+            # it was never going to ground in anything.
+            return CopilotResponse(
+                answer=await self._decline(query),
+                citations=[],
+                domains_used=[],
+                routing_reasoning=decision.reasoning,
+            )
+
         answers = await self.dispatch(query, decision.domains)
 
         if not answers:
+            # Domains WERE matched; no specialist is registered for any of them. A
+            # different, genuine problem from "nothing matched" above - a deployment
+            # gap, not an out-of-scope question - so it keeps its own distinct message.
             return CopilotResponse(
                 answer="No specialist agent is available for this question.",
                 citations=[],

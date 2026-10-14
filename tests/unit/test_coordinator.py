@@ -6,9 +6,15 @@ import asyncio
 
 import pytest
 
-from psiog_kendra.coordinator import Coordinator
+from psiog_kendra.coordinator import GREETING_REPLY, OUT_OF_SCOPE_REPLY, Coordinator
 from psiog_kendra.llm import Complexity, LLMError
-from psiog_kendra.schemas import AgentResponse, CopilotResponse, RoutingDecision, SynthesisResult
+from psiog_kendra.schemas import (
+    AgentResponse,
+    CopilotResponse,
+    RoutingDecision,
+    SmallTalkCheck,
+    SynthesisResult,
+)
 from tests.conftest import FakeLLM, answer, routing
 
 
@@ -55,16 +61,30 @@ class TestRouting:
         coord, _ = build(fake_llm)
         assert (await coord.route("q")).is_cross_domain is True
 
-    async def test_empty_routing_is_retried_not_keyword_matched(self, fake_llm: FakeLLM) -> None:
+    async def test_empty_routing_gets_one_honest_second_look(self, fake_llm: FakeLLM) -> None:
         replies = iter([RoutingDecision(domains=[]), routing("docs")])
         fake_llm.responses[RoutingDecision] = lambda _: next(replies)
         coord, _ = build(fake_llm)
 
         decision = await coord.route("what is the runbook?")
         assert decision.domains == ["docs"]
-        # Two LLM calls: the empty one and the forceful retry.
+        # Two LLM calls: the empty one and the second look.
         assert len(fake_llm.calls) == 2
-        assert "at least one domain" in fake_llm.calls[1]["user"]
+        # Not coerced into picking something - the retry must still allow empty, or a
+        # genuinely out-of-scope question (a greeting, small talk) gets forced into a
+        # wrong domain instead of correctly matching nothing.
+        assert "must return at least one" not in fake_llm.calls[1]["user"]
+        assert "return an empty list" in fake_llm.calls[1]["user"]
+
+    async def test_a_second_look_that_still_finds_nothing_stays_empty(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        fake_llm.responses[RoutingDecision] = RoutingDecision(domains=[])
+        coord, _ = build(fake_llm)
+
+        decision = await coord.route("good morning")
+        assert decision.domains == []
+        assert len(fake_llm.calls) == 2
 
     async def test_routing_failure_surfaces(self, fake_llm: FakeLLM) -> None:
         fake_llm.responses[RoutingDecision] = LLMError("model down")
@@ -214,13 +234,59 @@ class TestAsk:
         assert set(got.domains_used) == {"data-platform", "docs"}
         assert len(got.citations) == 2
 
-    async def test_no_specialist_available_is_reported_not_answered(
+    async def test_an_unmatched_domain_declines_without_calling_any_specialist(
         self, fake_llm: FakeLLM
     ) -> None:
+        # Routing matched nothing on either look - the out-of-scope path, not the
+        # "domain matched but no specialist for it" path below. No specialist should
+        # ever be dispatched to for a question that was never routed anywhere.
         fake_llm.responses[RoutingDecision] = RoutingDecision(domains=[])
-        coord, _ = build(fake_llm, crm=StubSpecialist("crm", answer("a", "c")))
+        fake_llm.responses[SmallTalkCheck] = SmallTalkCheck(is_greeting=False)
+        crm = StubSpecialist("crm", answer("a", "c"))
+        coord, _ = build(fake_llm, crm=crm)
 
         got = await coord.ask("what is the weather?")
         assert got.citations == []
         assert got.domains_used == []
+        assert got.answer == OUT_OF_SCOPE_REPLY
+        assert crm.calls == []
+
+    async def test_a_greeting_gets_a_friendly_reply_not_a_forced_domain(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # This is the defect this whole branch exists to fix: "Hii" was previously
+        # forced into a domain by the old coercive retry and answered with a real but
+        # irrelevant citation - it looked grounded and was not.
+        fake_llm.responses[RoutingDecision] = RoutingDecision(domains=[])
+        fake_llm.responses[SmallTalkCheck] = SmallTalkCheck(is_greeting=True)
+        coord, _ = build(fake_llm)
+
+        got = await coord.ask("Hii")
+        assert got.answer == GREETING_REPLY
+        assert got.citations == []
+        assert got.domains_used == []
+
+    async def test_small_talk_classification_failure_still_declines_gracefully(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        fake_llm.responses[RoutingDecision] = RoutingDecision(domains=[])
+        fake_llm.responses[SmallTalkCheck] = LLMError("model down")
+        coord, _ = build(fake_llm)
+
+        got = await coord.ask("asdkjhasd")
+        assert got.answer == OUT_OF_SCOPE_REPLY  # a safe default, never a crash
+
+    async def test_a_matched_domain_with_no_registered_specialist_is_reported_differently(
+        self, fake_llm: FakeLLM
+    ) -> None:
+        # A genuinely different problem from "nothing matched": routing found a real
+        # domain, but no specialist for it is wired into this coordinator. A deployment
+        # gap, not an out-of-scope question - it must not share the greeting/decline path.
+        fake_llm.responses[RoutingDecision] = routing("crm")
+        coord, _ = build(fake_llm)  # no crm specialist registered
+
+        got = await coord.ask("who owns Acme?")
+        assert got.citations == []
+        assert got.domains_used == []
         assert "No specialist agent" in got.answer
+        assert got.answer != OUT_OF_SCOPE_REPLY

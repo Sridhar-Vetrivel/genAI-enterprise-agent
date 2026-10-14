@@ -49,6 +49,25 @@ class RoutingDecision(BaseModel):
         object.__setattr__(self, "is_cross_domain", len(self.domains) > 1)
 
 
+class SmallTalkCheck(BaseModel):
+    """Asked only when routing found no matching domain — is this a greeting/pleasantry,
+    or a real question that is simply outside what the copilot covers? A single bool is
+    cheap on the SIMPLE model tier, and keeps the distinction LLM-driven rather than a
+    keyword check on words like "hi" or "thanks".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    is_greeting: bool = False
+
+    @field_validator("is_greeting", mode="before")
+    @classmethod
+    def _coerce_bool(cls, v: object) -> bool:
+        if isinstance(v, str):
+            return v.strip().lower() in {"true", "yes", "1"}
+        return bool(v)
+
+
 class AgentResponse(BaseModel):
     """What every specialist agent returns. `citations` is what makes it grounded."""
 
